@@ -23,6 +23,9 @@ pub enum Focus {
     Detail,
 }
 
+/// Minimum width to show both panes
+const MIN_DUAL_PANE_WIDTH: u16 = 80;
+
 /// Render the main application layout
 /// Returns (list_area, detail_area) for mouse handling
 #[allow(clippy::too_many_arguments)]
@@ -37,12 +40,14 @@ pub fn render_layout(
     filter: Option<&str>,
     show_help: bool,
     hide_closed: bool,
+    show_detail: bool,
     input_mode: InputMode,
     search_text: &str,
     search_cursor: usize,
     create_modal: &CreateModal,
 ) -> (Rect, Rect) {
     let area = frame.area();
+    let is_narrow = area.width < MIN_DUAL_PANE_WIDTH;
 
     // Main vertical layout: content + footer (no header)
     let chunks = Layout::default()
@@ -53,32 +58,43 @@ pub fn render_layout(
         ])
         .split(area);
 
-    // Render main content (two panes)
-    let content_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(split_percent),
-            Constraint::Percentage(100 - split_percent),
-        ])
-        .split(chunks[0]);
+    // Determine layout based on show_detail and terminal width
+    let (list_area, detail_area) = if !show_detail {
+        // Only show list (full width)
+        (chunks[0], Rect::default())
+    } else if is_narrow {
+        // Narrow terminal: only show detail when it's open
+        (Rect::default(), chunks[0])
+    } else {
+        // Normal: show both panes
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(split_percent),
+                Constraint::Percentage(100 - split_percent),
+            ])
+            .split(chunks[0]);
+        (content_chunks[0], content_chunks[1])
+    };
 
-    let list_area = content_chunks[0];
-    let detail_area = content_chunks[1];
+    // Render bead list (if visible)
+    if list_area.width > 0 {
+        let list = BeadList::new(beads, theme)
+            .focused(focus == Focus::List)
+            .filter(filter)
+            .hide_closed(hide_closed);
+        frame.render_stateful_widget(list, list_area, list_state);
+    }
 
-    // Render bead list
-    let list = BeadList::new(beads, theme)
-        .focused(focus == Focus::List)
-        .filter(filter)
-        .hide_closed(hide_closed);
-    frame.render_stateful_widget(list, list_area, list_state);
-
-    // Render detail panel
-    let tree_order = build_tree_order(beads, hide_closed, filter);
-    let selected_bead = list_state
-        .selected()
-        .and_then(|i| tree_order.get(i).map(|(b, _)| *b));
-    let detail = DetailPanel::new(selected_bead, theme).focused(focus == Focus::Detail);
-    frame.render_stateful_widget(detail, detail_area, detail_state);
+    // Render detail panel (if visible)
+    if detail_area.width > 0 {
+        let tree_order = build_tree_order(beads, hide_closed, filter);
+        let selected_bead = list_state
+            .selected()
+            .and_then(|i| tree_order.get(i).map(|(b, _)| *b));
+        let detail = DetailPanel::new(selected_bead, theme).focused(focus == Focus::Detail);
+        frame.render_stateful_widget(detail, detail_area, detail_state);
+    }
 
     // Render footer
     render_footer(
@@ -89,6 +105,8 @@ pub fn render_layout(
         search_text,
         search_cursor,
         hide_closed,
+        show_detail,
+        focus,
     );
 
     // Render help overlay if needed
@@ -112,6 +130,8 @@ fn render_footer(
     input_text: &str,
     input_cursor: usize,
     hide_closed: bool,
+    show_detail: bool,
+    focus: Focus,
 ) {
     // Lazygit-style footer: "Key: desc | Key: desc | ..."
     let closed_label = if hide_closed {
@@ -119,11 +139,19 @@ fn render_footer(
     } else {
         "hide closed"
     };
-    let keys = match input_mode {
+    let keys: Vec<(&str, &str)> = match input_mode {
         InputMode::Search => vec![("Esc", "cancel"), ("Enter", "confirm")],
         InputMode::Creating => vec![("Esc", "cancel"), ("Tab", "next field"), ("C-s", "create")],
+        InputMode::Normal if show_detail && focus == Focus::Detail => vec![
+            ("j/k", "scroll"),
+            ("Esc/h", "close"),
+            ("s", "status"),
+            ("?", "help"),
+            ("q", "quit"),
+        ],
         InputMode::Normal => vec![
             ("j/k", "nav"),
+            ("Enter/l", "open"),
             ("a", "add"),
             ("s", "status"),
             ("c", closed_label),

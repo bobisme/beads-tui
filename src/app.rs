@@ -57,6 +57,8 @@ pub struct App {
     show_help: bool,
     /// Hide closed beads
     hide_closed: bool,
+    /// Show detail pane
+    show_detail: bool,
     /// Should the app quit
     should_quit: bool,
     /// Refresh interval
@@ -87,6 +89,7 @@ impl App {
             create_modal: CreateModal::new(),
             show_help: false,
             hide_closed: true, // Start with closed beads hidden
+            show_detail: false, // Start with only list visible
             should_quit: false,
             refresh_interval: Duration::from_secs(refresh_secs),
             last_refresh: Instant::now(),
@@ -228,23 +231,35 @@ impl App {
                 self.list_state.last(self.filtered_len());
             }
 
-            // Focus
-            KeyCode::Tab => {
+            // Open detail pane
+            KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right if self.focus == Focus::List => {
+                self.show_detail = true;
+                self.focus = Focus::Detail;
+                self.detail_state.reset();
+            }
+
+            // Close detail pane
+            KeyCode::Esc | KeyCode::Char('h') | KeyCode::Left if self.focus == Focus::Detail => {
+                self.show_detail = false;
+                self.focus = Focus::List;
+            }
+
+            // Focus toggle (only when detail is shown)
+            KeyCode::Tab if self.show_detail => {
                 self.focus = match self.focus {
                     Focus::List => Focus::Detail,
                     Focus::Detail => Focus::List,
                 };
-                // Reset detail scroll when switching to it
                 if self.focus == Focus::Detail {
                     self.detail_state.reset();
                 }
             }
 
-            // Pane resizing
-            KeyCode::Char('<') | KeyCode::Char('H') => {
+            // Pane resizing (only when detail is shown)
+            KeyCode::Char('<') | KeyCode::Char('H') if self.show_detail => {
                 self.split_percent = self.split_percent.saturating_sub(5).max(20);
             }
-            KeyCode::Char('>') | KeyCode::Char('L') => {
+            KeyCode::Char('>') | KeyCode::Char('L') if self.show_detail => {
                 self.split_percent = (self.split_percent + 5).min(80);
             }
 
@@ -254,8 +269,8 @@ impl App {
                 self.search_input.clear();
             }
 
-            // Clear filter
-            KeyCode::Esc => {
+            // Clear filter (when list focused or no detail)
+            KeyCode::Esc if self.focus == Focus::List => {
                 self.search_input.clear();
             }
 
@@ -334,12 +349,15 @@ impl App {
 
                 // Check which pane was clicked
                 if self.list_area.contains((x, y).into()) {
-                    self.focus = Focus::List;
                     // Calculate which item was clicked
                     let inner_y = y.saturating_sub(self.list_area.y + 1); // +1 for border
                     let idx = inner_y as usize;
                     if idx < self.filtered_len() {
                         self.list_state.select(Some(idx));
+                        // Open detail pane on click
+                        self.show_detail = true;
+                        self.focus = Focus::Detail;
+                        self.detail_state.reset();
                     }
                 } else if self.detail_area.contains((x, y).into()) {
                     self.focus = Focus::Detail;
@@ -469,6 +487,7 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         let filter = app.filter().map(|s| s.to_string());
         let show_help = app.show_help;
         let hide_closed = app.hide_closed;
+        let show_detail = app.show_detail;
         let input_mode = app.input_mode;
         let search_text = app.search_input.text().to_string();
         let search_cursor = app.search_input.cursor();
@@ -486,6 +505,7 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
                 filter.as_deref(),
                 show_help,
                 hide_closed,
+                show_detail,
                 input_mode,
                 &search_text,
                 search_cursor,
