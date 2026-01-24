@@ -29,6 +29,16 @@ impl BeadStore {
     pub fn load_all(&self) -> Result<Vec<Bead>> {
         let mut beads = self.load_beads()?;
         let deps = self.load_dependencies()?;
+        let labels = self.load_labels()?;
+
+        // Apply labels to beads
+        for bead in &mut beads {
+            for (issue_id, label) in &labels {
+                if issue_id == &bead.id {
+                    bead.labels.push(label.clone());
+                }
+            }
+        }
 
         // Apply dependencies to beads
         for bead in &mut beads {
@@ -75,7 +85,6 @@ impl BeadStore {
                 priority,
                 issue_type,
                 description,
-                labels,
                 created_by,
                 assignee,
                 created_at,
@@ -83,16 +92,12 @@ impl BeadStore {
                 closed_at,
                 close_reason
             FROM issues
+            WHERE status != 'tombstone' AND deleted_at IS NULL
             "#,
         )?;
 
         let beads = stmt
             .query_map([], |row| {
-                let labels_json: Option<String> = row.get(6)?;
-                let labels: Vec<String> = labels_json
-                    .and_then(|s| serde_json::from_str(&s).ok())
-                    .unwrap_or_default();
-
                 Ok(Bead {
                     id: row.get(0)?,
                     title: row.get(1)?,
@@ -100,22 +105,22 @@ impl BeadStore {
                     priority: row.get::<_, i64>(3)? as u8,
                     bead_type: row.get::<_, String>(4)?.parse().unwrap_or(BeadType::Task),
                     description: row.get(5)?,
-                    labels,
-                    created_by: row.get(7)?,
-                    assignee: row.get(8)?,
+                    labels: Vec::new(), // Loaded separately from labels table
+                    created_by: row.get(6)?,
+                    assignee: row.get(7)?,
                     created_at: row
-                        .get::<_, Option<String>>(9)?
+                        .get::<_, Option<String>>(8)?
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc)),
                     updated_at: row
-                        .get::<_, Option<String>>(10)?
+                        .get::<_, Option<String>>(9)?
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc)),
                     closed_at: row
-                        .get::<_, Option<String>>(11)?
+                        .get::<_, Option<String>>(10)?
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc)),
-                    close_reason: row.get(12)?,
+                    close_reason: row.get(11)?,
                     parent_ids: Vec::new(),
                     blocked_by: Vec::new(),
                     blocks: Vec::new(),
@@ -147,6 +152,24 @@ impl BeadStore {
             .collect();
 
         Ok(deps)
+    }
+
+    fn load_labels(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT issue_id, label
+            FROM labels
+            "#,
+        )?;
+
+        let labels = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(labels)
     }
 
     /// Get a single bead by ID

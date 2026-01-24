@@ -3,12 +3,15 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
 };
 
-use crate::data::Bead;
-use crate::ui::detail::DetailPanel;
+use crate::app::InputMode;
+use crate::data::{build_tree_order, Bead};
+use crate::ui::create_modal::{render_create_modal, CreateModal};
+use crate::ui::detail::{DetailPanel, DetailState};
 use crate::ui::list::{BeadList, BeadListState};
 use crate::ui::Theme;
 
@@ -21,30 +24,34 @@ pub enum Focus {
 }
 
 /// Render the main application layout
+/// Returns (list_area, detail_area) for mouse handling
+#[allow(clippy::too_many_arguments)]
 pub fn render_layout(
     frame: &mut ratatui::Frame,
     beads: &[Bead],
     list_state: &mut BeadListState,
+    detail_state: &mut DetailState,
     theme: &Theme,
     focus: Focus,
     split_percent: u16,
     filter: Option<&str>,
     show_help: bool,
-) {
+    hide_closed: bool,
+    input_mode: InputMode,
+    search_text: &str,
+    search_cursor: usize,
+    create_modal: &CreateModal,
+) -> (Rect, Rect) {
     let area = frame.area();
 
-    // Main vertical layout: header, content, footer
+    // Main vertical layout: content + footer (no header)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // Status bar
             Constraint::Min(3),    // Main content
             Constraint::Length(1), // Footer
         ])
         .split(area);
-
-    // Render status bar
-    render_status_bar(frame, chunks[0], beads, theme, filter);
 
     // Render main content (two panes)
     let content_chunks = Layout::default()
@@ -53,132 +60,122 @@ pub fn render_layout(
             Constraint::Percentage(split_percent),
             Constraint::Percentage(100 - split_percent),
         ])
-        .split(chunks[1]);
+        .split(chunks[0]);
+
+    let list_area = content_chunks[0];
+    let detail_area = content_chunks[1];
 
     // Render bead list
     let list = BeadList::new(beads, theme)
         .focused(focus == Focus::List)
-        .filter(filter);
-    frame.render_stateful_widget(list, content_chunks[0], list_state);
+        .filter(filter)
+        .hide_closed(hide_closed);
+    frame.render_stateful_widget(list, list_area, list_state);
 
     // Render detail panel
-    let selected_bead = list_state.selected().and_then(|i| {
-        // Filter beads same way as list does to get correct index
-        beads
-            .iter()
-            .filter(|b| {
-                filter
-                    .map(|f| b.title.to_lowercase().contains(&f.to_lowercase()))
-                    .unwrap_or(true)
-            })
-            .nth(i)
-    });
+    let tree_order = build_tree_order(beads, hide_closed, filter);
+    let selected_bead = list_state
+        .selected()
+        .and_then(|i| tree_order.get(i).map(|(b, _)| *b));
     let detail = DetailPanel::new(selected_bead, theme).focused(focus == Focus::Detail);
-    frame.render_widget(detail, content_chunks[1]);
+    frame.render_stateful_widget(detail, detail_area, detail_state);
 
     // Render footer
-    render_footer(frame, chunks[2], theme, filter.is_some());
+    render_footer(
+        frame,
+        chunks[1],
+        theme,
+        input_mode,
+        search_text,
+        search_cursor,
+        hide_closed,
+    );
 
     // Render help overlay if needed
     if show_help {
         render_help_overlay(frame, area, theme);
     }
+
+    // Render create modal if in creating mode
+    if input_mode == InputMode::Creating {
+        render_create_modal(frame, area, theme, create_modal);
+    }
+
+    (list_area, detail_area)
 }
 
-fn render_status_bar(
+fn render_footer(
     frame: &mut ratatui::Frame,
     area: Rect,
-    beads: &[Bead],
     theme: &Theme,
-    filter: Option<&str>,
+    input_mode: InputMode,
+    input_text: &str,
+    input_cursor: usize,
+    hide_closed: bool,
 ) {
-    let total = beads.len();
-    let open = beads
-        .iter()
-        .filter(|b| b.status == crate::data::BeadStatus::Open)
-        .count();
-    let in_progress = beads
-        .iter()
-        .filter(|b| b.status == crate::data::BeadStatus::InProgress)
-        .count();
-    let blocked = beads
-        .iter()
-        .filter(|b| b.status == crate::data::BeadStatus::Blocked)
-        .count();
-    let closed = beads
-        .iter()
-        .filter(|b| b.status == crate::data::BeadStatus::Closed)
-        .count();
+    // Lazygit-style footer: "Key: desc | Key: desc | ..."
+    let closed_label = if hide_closed {
+        "show closed"
+    } else {
+        "hide closed"
+    };
+    let keys = match input_mode {
+        InputMode::Search => vec![("Esc", "cancel"), ("Enter", "confirm")],
+        InputMode::Creating => vec![("Esc", "cancel"), ("Tab", "next field"), ("C-s", "create")],
+        InputMode::Normal => vec![
+            ("j/k", "nav"),
+            ("a", "add"),
+            ("s", "status"),
+            ("c", closed_label),
+            ("/", "filter"),
+            ("?", "help"),
+            ("q", "quit"),
+        ],
+    };
 
-    let mut spans = vec![
-        Span::styled(
-            " bu ",
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(format!(" {} beads ", total), Style::default().fg(theme.fg)),
-        Span::styled("\u{2502} ", Style::default().fg(theme.border)),
-        Span::styled(
-            format!("\u{25cf}{} ", open),
-            Style::default().fg(theme.status_open),
-        ),
-        Span::styled(
-            format!("\u{25d0}{} ", in_progress),
-            Style::default().fg(theme.status_in_progress),
-        ),
-        Span::styled(
-            format!("\u{26d4}{} ", blocked),
-            Style::default().fg(theme.status_blocked),
-        ),
-        Span::styled(
-            format!("\u{2714}{}", closed),
-            Style::default().fg(theme.status_closed),
-        ),
-    ];
+    let mut spans: Vec<Span> = Vec::new();
 
-    if let Some(f) = filter {
+    for (i, (key, desc)) in keys.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" | ", Style::default().fg(theme.border)));
+        }
         spans.push(Span::styled(
-            format!(" \u{2502} Filter: {}", f),
+            key.to_string(),
             Style::default().fg(theme.accent),
+        ));
+        spans.push(Span::styled(
+            format!(": {}", desc),
+            Style::default().fg(theme.muted),
         ));
     }
 
-    let status = Paragraph::new(Line::from(spans)).style(Style::default().bg(theme.selection_bg));
-    frame.render_widget(status, area);
-}
+    // Show input text if in search mode
+    if input_mode == InputMode::Search {
+        spans.push(Span::styled("  |  ", Style::default().fg(theme.border)));
+        spans.push(Span::styled("/", Style::default().fg(theme.accent)));
 
-fn render_footer(frame: &mut ratatui::Frame, area: Rect, theme: &Theme, filtering: bool) {
-    let keys = if filtering {
-        vec![("Esc", "clear"), ("Enter", "confirm")]
-    } else {
-        vec![
-            ("j/k", "nav"),
-            ("Enter", "detail"),
-            ("Tab", "focus"),
-            ("n", "new"),
-            ("s", "status"),
-            ("/", "search"),
-            ("?", "help"),
-            ("q", "quit"),
-        ]
-    };
-
-    let spans: Vec<Span> = keys
-        .iter()
-        .flat_map(|(key, desc)| {
-            vec![
-                Span::styled(
-                    format!(" {} ", key),
-                    Style::default()
-                        .fg(theme.bg)
-                        .bg(theme.accent)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!("{} ", desc), Style::default().fg(theme.muted)),
-            ]
-        })
-        .collect();
+        // Show text with cursor
+        let (before, after) = input_text.split_at(input_cursor.min(input_text.len()));
+        spans.push(Span::styled(
+            before.to_string(),
+            Style::default().fg(theme.fg),
+        ));
+        spans.push(Span::styled(
+            "\u{2588}".to_string(), // Block cursor
+            Style::default().fg(theme.accent),
+        ));
+        spans.push(Span::styled(
+            after.to_string(),
+            Style::default().fg(theme.fg),
+        ));
+    } else if input_mode == InputMode::Normal && !input_text.is_empty() {
+        // Show active filter
+        spans.push(Span::styled("  |  ", Style::default().fg(theme.border)));
+        spans.push(Span::styled(
+            format!("filter: {}", input_text),
+            Style::default().fg(theme.fg),
+        ));
+    }
 
     let footer = Paragraph::new(Line::from(spans));
     frame.render_widget(footer, area);
@@ -187,14 +184,13 @@ fn render_footer(frame: &mut ratatui::Frame, area: Rect, theme: &Theme, filterin
 fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
     // Center a help box
     let help_width = 50.min(area.width.saturating_sub(4));
-    let help_height = 16.min(area.height.saturating_sub(4));
+    let help_height = 18.min(area.height.saturating_sub(4));
     let x = (area.width - help_width) / 2;
     let y = (area.height - help_height) / 2;
     let help_area = Rect::new(x, y, help_width, help_height);
 
     // Clear the area
-    let clear = Block::default().style(Style::default().bg(theme.bg));
-    frame.render_widget(clear, help_area);
+    frame.render_widget(Clear, help_area);
 
     let help_text = vec![
         Line::from(vec![Span::styled(
@@ -205,35 +201,36 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         )]),
         Line::raw(""),
         Line::from(vec![
-            Span::styled(
-                "j/k, \u{2191}/\u{2193}  ",
-                Style::default().fg(theme.accent),
-            ),
+            Span::styled("j/k          ", Style::default().fg(theme.accent)),
             Span::raw("Move up/down"),
+        ]),
+        Line::from(vec![
+            Span::styled("u/d, b/f     ", Style::default().fg(theme.accent)),
+            Span::raw("Page up/down (10 lines)"),
         ]),
         Line::from(vec![
             Span::styled("g/G          ", Style::default().fg(theme.accent)),
             Span::raw("First/last item"),
         ]),
         Line::from(vec![
-            Span::styled("Enter        ", Style::default().fg(theme.accent)),
-            Span::raw("Toggle detail panel"),
-        ]),
-        Line::from(vec![
             Span::styled("Tab          ", Style::default().fg(theme.accent)),
             Span::raw("Switch focus"),
         ]),
         Line::from(vec![
-            Span::styled("n            ", Style::default().fg(theme.accent)),
-            Span::raw("New bead"),
+            Span::styled("a            ", Style::default().fg(theme.accent)),
+            Span::raw("Add new task"),
         ]),
         Line::from(vec![
             Span::styled("s            ", Style::default().fg(theme.accent)),
-            Span::raw("Change status"),
+            Span::raw("Cycle status"),
+        ]),
+        Line::from(vec![
+            Span::styled("c            ", Style::default().fg(theme.accent)),
+            Span::raw("Toggle closed"),
         ]),
         Line::from(vec![
             Span::styled("/            ", Style::default().fg(theme.accent)),
-            Span::raw("Search/filter"),
+            Span::raw("Filter"),
         ]),
         Line::from(vec![
             Span::styled("r            ", Style::default().fg(theme.accent)),
@@ -244,9 +241,14 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
             Span::raw("Cycle theme"),
         ]),
         Line::from(vec![
-            Span::styled("q, Ctrl-C    ", Style::default().fg(theme.accent)),
+            Span::styled("q            ", Style::default().fg(theme.accent)),
             Span::raw("Quit"),
         ]),
+        Line::raw(""),
+        Line::from(vec![Span::styled(
+            "Mouse: click to select, wheel to scroll",
+            Style::default().fg(theme.muted),
+        )]),
         Line::raw(""),
         Line::from(vec![Span::styled(
             "Press any key to close",
@@ -258,6 +260,7 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_set(border::ROUNDED)
                 .border_style(Style::default().fg(theme.accent))
                 .title(" Help ")
                 .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),

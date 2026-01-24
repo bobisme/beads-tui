@@ -125,6 +125,24 @@ impl BrCli {
         Ok(())
     }
 
+    /// Add a label to a bead
+    pub fn add_label(id: &str, label: &str) -> Result<()> {
+        let output = Command::new("br")
+            .arg("update")
+            .arg(id)
+            .arg("--add-label")
+            .arg(label)
+            .output()
+            .context("Failed to execute br update --add-label command")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("br update --add-label failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
     /// Check if br CLI is available
     pub fn is_available() -> bool {
         Command::new("br")

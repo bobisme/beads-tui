@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// Status of a bead
@@ -18,13 +19,13 @@ pub enum BeadStatus {
 }
 
 impl BeadStatus {
-    /// Get the display icon for this status
+    /// Get the display icon for this status (simple unicode, no emojis)
     pub fn icon(&self) -> &'static str {
         match self {
-            BeadStatus::Open => "\u{25cf}",       // ●
-            BeadStatus::InProgress => "\u{25d0}", // ◐
-            BeadStatus::Blocked => "\u{26d4}",    // ⛔
-            BeadStatus::Closed => "\u{2714}",     // ✔
+            BeadStatus::Open => "\u{25cb}",       // ○ (open circle)
+            BeadStatus::InProgress => "\u{25cf}", // ● (filled circle)
+            BeadStatus::Blocked => "\u{25a0}",    // ■ (filled square - blocked)
+            BeadStatus::Closed => "\u{2713}",     // ✓ (check mark)
         }
     }
 
@@ -74,6 +75,55 @@ pub enum BeadType {
     Feature,
     Epic,
     Story,
+}
+
+impl BeadType {
+    /// Get the outline (open/blocked-open) icon for this type
+    pub fn icon_outline(&self) -> &'static str {
+        match self {
+            BeadType::Task => "\u{25b7}",    // ▷ right triangle outline
+            BeadType::Bug => "\u{2298}",     // ⊘ circled slash
+            BeadType::Feature => "\u{2606}", // ☆ star outline
+            BeadType::Epic => "\u{25c7}",    // ◇ diamond outline
+            BeadType::Story => "\u{2630}",   // ☰ trigram
+        }
+    }
+
+    /// Get the filled (in-progress/blocked-in-progress) icon for this type
+    pub fn icon_filled(&self) -> &'static str {
+        match self {
+            BeadType::Task => "\u{25b6}",    // ▶ right triangle filled
+            BeadType::Bug => "\u{25cf}",     // ● filled circle
+            BeadType::Feature => "\u{2605}", // ★ star filled
+            BeadType::Epic => "\u{25c6}",    // ◆ diamond filled
+            BeadType::Story => "\u{25e4}",   // ▤ square with lines
+        }
+    }
+
+    /// Get the closed (done) icon for this type
+    pub fn icon_closed(&self) -> &'static str {
+        match self {
+            BeadType::Task => "\u{25b6}",    // ▶ right triangle filled
+            BeadType::Bug => "\u{25cf}",     // ● filled circle
+            BeadType::Feature => "\u{2605}", // ★ star filled
+            BeadType::Epic => "\u{25c6}",    // ◆ diamond filled
+            BeadType::Story => "\u{25a0}",   // ■ filled square
+        }
+    }
+
+    /// Get the appropriate icon based on status
+    /// - Open: outline
+    /// - InProgress: filled
+    /// - Blocked: outline (color will be red)
+    /// - Closed: closed variant (filled, grayed)
+    pub fn icon_for_status(&self, status: &BeadStatus) -> &'static str {
+        match status {
+            BeadStatus::Open => self.icon_outline(),
+            BeadStatus::InProgress => self.icon_filled(),
+            BeadStatus::Blocked => self.icon_outline(), // Outline but red
+            BeadStatus::Closed => self.icon_closed(),
+        }
+    }
 }
 
 impl fmt::Display for BeadType {
@@ -216,4 +266,87 @@ impl Default for Bead {
             blocks: Vec::new(),
         }
     }
+}
+
+/// Build a tree-ordered list of beads with their depths.
+/// Non-closed beads are arranged hierarchically, closed beads are flat at the end.
+/// Returns Vec of (bead reference, depth).
+pub fn build_tree_order<'a>(
+    beads: &'a [Bead],
+    hide_closed: bool,
+    filter: Option<&str>,
+) -> Vec<(&'a Bead, usize)> {
+    // Filter beads first
+    let filtered: Vec<&Bead> = beads
+        .iter()
+        .filter(|b| {
+            // Apply hide_closed filter
+            if hide_closed && b.status == BeadStatus::Closed {
+                return false;
+            }
+            // Apply text filter
+            filter
+                .map(|f| b.title.to_lowercase().contains(&f.to_lowercase()))
+                .unwrap_or(true)
+        })
+        .collect();
+
+    // Separate closed and non-closed
+    let (closed, non_closed): (Vec<_>, Vec<_>) = filtered
+        .into_iter()
+        .partition(|b| b.status == BeadStatus::Closed);
+
+    // Build parent -> children map for non-closed beads
+    let non_closed_ids: HashSet<&str> = non_closed.iter().map(|b| b.id.as_str()).collect();
+    let mut children_map: HashMap<&str, Vec<&Bead>> = HashMap::new();
+    let mut has_parent: HashSet<&str> = HashSet::new();
+
+    for bead in &non_closed {
+        for parent_id in &bead.parent_ids {
+            // Only count as child if parent is also in non_closed set
+            if non_closed_ids.contains(parent_id.as_str()) {
+                children_map
+                    .entry(parent_id.as_str())
+                    .or_default()
+                    .push(bead);
+                has_parent.insert(bead.id.as_str());
+            }
+        }
+    }
+
+    // Find roots (beads with no parent in the set)
+    let mut roots: Vec<&Bead> = non_closed
+        .iter()
+        .filter(|b| !has_parent.contains(b.id.as_str()))
+        .copied()
+        .collect();
+
+    // Sort roots by priority, then title
+    roots.sort_by(|a, b| a.priority.cmp(&b.priority).then(a.title.cmp(&b.title)));
+
+    // DFS to build ordered list with depths
+    let mut result: Vec<(&Bead, usize)> = Vec::new();
+    let mut stack: Vec<(&Bead, usize)> = roots.into_iter().map(|b| (b, 0)).rev().collect();
+
+    while let Some((bead, depth)) = stack.pop() {
+        result.push((bead, depth));
+
+        // Add children in reverse order (so they come out in correct order)
+        if let Some(children) = children_map.get(bead.id.as_str()) {
+            let mut sorted_children = children.clone();
+            sorted_children.sort_by(|a, b| {
+                b.priority.cmp(&a.priority).then(b.title.cmp(&a.title)) // Reverse for stack
+            });
+            for child in sorted_children {
+                stack.push((child, depth + 1));
+            }
+        }
+    }
+
+    // Add closed beads flat at the end (depth 0)
+    for bead in closed {
+        result.push((bead, 0));
+    }
+
+    result
 }

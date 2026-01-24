@@ -7,6 +7,6 @@ mod bead;
 mod br;
 mod sqlite;
 
-pub use bead::{Bead, BeadStatus, BeadType, DependencyType};
+pub use bead::{build_tree_order, Bead, BeadStatus, BeadType, DependencyType};
 pub use br::BrCli;
 pub use sqlite::BeadStore;

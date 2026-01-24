@@ -6,11 +6,12 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget},
 };
 
-use crate::data::{Bead, BeadStatus};
+use crate::data::{build_tree_order, Bead, BeadStatus};
 use crate::ui::Theme;
 
 /// State for the bead list
@@ -86,6 +87,7 @@ pub struct BeadList<'a> {
     theme: &'a Theme,
     focused: bool,
     filter: Option<&'a str>,
+    hide_closed: bool,
 }
 
 impl<'a> BeadList<'a> {
@@ -95,6 +97,7 @@ impl<'a> BeadList<'a> {
             theme,
             focused: true,
             filter: None,
+            hide_closed: false,
         }
     }
 
@@ -108,34 +111,40 @@ impl<'a> BeadList<'a> {
         self
     }
 
-    fn status_style(&self, status: &BeadStatus) -> Style {
-        let color = match status {
+    pub fn hide_closed(mut self, hide: bool) -> Self {
+        self.hide_closed = hide;
+        self
+    }
+
+    /// Get color for the combined type+status icon
+    fn type_status_color(&self, status: &BeadStatus) -> ratatui::style::Color {
+        match status {
             BeadStatus::Open => self.theme.status_open,
             BeadStatus::InProgress => self.theme.status_in_progress,
             BeadStatus::Blocked => self.theme.status_blocked,
             BeadStatus::Closed => self.theme.status_closed,
-        };
-        Style::default().fg(color)
+        }
     }
 
     fn priority_style(&self, priority: u8) -> Style {
         Style::default().fg(self.theme.priority_color(priority))
     }
 
-    fn render_bead(&self, bead: &Bead) -> ListItem<'static> {
-        let status_icon = bead.status.icon();
-        let status_style = self.status_style(&bead.status);
+    fn render_bead(&self, bead: &Bead, depth: usize) -> ListItem<'static> {
+        // Combined type+status icon: shape = type, color = status
+        let type_icon = bead.bead_type.icon_for_status(&bead.status);
+        let icon_color = self.type_status_color(&bead.status);
         let priority_style = self.priority_style(bead.priority);
 
+        // Indentation: 2 spaces per depth level
+        let indent = "  ".repeat(depth);
+
         let line = Line::from(vec![
-            Span::styled(format!("{} ", status_icon), status_style),
+            Span::raw(indent),
+            Span::styled(format!("{} ", type_icon), Style::default().fg(icon_color)),
             Span::styled(
                 format!("P{} ", bead.priority),
                 priority_style.add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("[{}] ", bead.bead_type),
-                Style::default().fg(self.theme.muted),
             ),
             Span::styled(bead.id.clone(), Style::default().fg(self.theme.muted)),
             Span::raw(": "),
@@ -150,25 +159,22 @@ impl<'a> StatefulWidget for BeadList<'a> {
     type State = BeadListState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let items: Vec<ListItem<'static>> = self
-            .beads
+        // Build tree-ordered list with depths
+        let tree_order = build_tree_order(self.beads, self.hide_closed, self.filter);
+        let items: Vec<ListItem<'static>> = tree_order
             .iter()
-            .filter(|b| {
-                self.filter
-                    .map(|f| b.title.to_lowercase().contains(&f.to_lowercase()))
-                    .unwrap_or(true)
-            })
-            .map(|b| self.render_bead(b))
+            .map(|(b, depth)| self.render_bead(b, *depth))
             .collect();
 
         let border_style = if self.focused {
-            Style::default().fg(self.theme.accent)
+            Style::default().fg(self.theme.focused_border)
         } else {
             Style::default().fg(self.theme.border)
         };
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_set(border::ROUNDED)
             .border_style(border_style)
             .title(" Beads ")
             .title_style(
@@ -177,15 +183,12 @@ impl<'a> StatefulWidget for BeadList<'a> {
                     .add_modifier(Modifier::BOLD),
             );
 
-        let highlight_style = Style::default()
-            .bg(self.theme.selection_bg)
-            .fg(self.theme.selection_fg)
-            .add_modifier(Modifier::BOLD);
+        // Only set background for highlight - preserve span foreground colors
+        let highlight_style = Style::default().bg(self.theme.selection_bg);
 
         let list = List::new(items)
             .block(block)
-            .highlight_style(highlight_style)
-            .highlight_symbol("> ");
+            .highlight_style(highlight_style);
 
         StatefulWidget::render(list, area, buf, &mut state.list_state);
     }

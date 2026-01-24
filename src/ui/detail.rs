@@ -4,12 +4,51 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, Widget, Wrap},
+    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
 use crate::data::{Bead, BeadStatus};
 use crate::ui::Theme;
+
+/// State for the detail panel (scroll position)
+#[derive(Debug, Default, Clone)]
+pub struct DetailState {
+    /// Vertical scroll offset
+    scroll: u16,
+    /// Total content height (for bounds checking)
+    content_height: u16,
+    /// Viewport height
+    viewport_height: u16,
+}
+
+impl DetailState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Scroll up by n lines
+    pub fn scroll_up(&mut self, n: u16) {
+        self.scroll = self.scroll.saturating_sub(n);
+    }
+
+    /// Scroll down by n lines
+    pub fn scroll_down(&mut self, n: u16) {
+        let max_scroll = self.content_height.saturating_sub(self.viewport_height);
+        self.scroll = (self.scroll + n).min(max_scroll);
+    }
+
+    /// Reset scroll to top
+    pub fn reset(&mut self) {
+        self.scroll = 0;
+    }
+
+    /// Get current scroll position
+    pub fn scroll(&self) -> u16 {
+        self.scroll
+    }
+}
 
 /// A panel showing detailed information about a bead
 pub struct DetailPanel<'a> {
@@ -202,16 +241,19 @@ impl<'a> DetailPanel<'a> {
     }
 }
 
-impl Widget for DetailPanel<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl StatefulWidget for DetailPanel<'_> {
+    type State = DetailState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let border_style = if self.focused {
-            Style::default().fg(self.theme.accent)
+            Style::default().fg(self.theme.focused_border)
         } else {
             Style::default().fg(self.theme.border)
         };
 
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_set(border::ROUNDED)
             .border_style(border_style)
             .title(" Detail ")
             .title_style(
@@ -223,11 +265,21 @@ impl Widget for DetailPanel<'_> {
         let inner = block.inner(area);
         block.render(area, buf);
 
+        // Update viewport height in state
+        state.viewport_height = inner.height;
+
         if let Some(bead) = self.bead {
             let text = self.render_metadata(bead);
-            let para = Paragraph::new(text).wrap(Wrap { trim: false });
+
+            // Update content height in state
+            state.content_height = text.lines.len() as u16;
+
+            let para = Paragraph::new(text)
+                .wrap(Wrap { trim: false })
+                .scroll((state.scroll, 0));
             para.render(inner, buf);
         } else {
+            state.content_height = 1;
             let text = Text::from(vec![Line::from(vec![Span::styled(
                 "No bead selected",
                 Style::default().fg(self.theme.muted),
