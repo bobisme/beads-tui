@@ -302,11 +302,21 @@ pub fn build_tree_order<'a>(
     let mut has_parent: HashSet<&str> = HashSet::new();
 
     for bead in &non_closed {
+        // Parent-child relationships
         for parent_id in &bead.parent_ids {
-            // Only count as child if parent is also in non_closed set
             if non_closed_ids.contains(parent_id.as_str()) {
                 children_map
                     .entry(parent_id.as_str())
+                    .or_default()
+                    .push(bead);
+                has_parent.insert(bead.id.as_str());
+            }
+        }
+        // Blocked-by relationships: if A is blocked by B, show A under B
+        for blocker_id in &bead.blocked_by {
+            if non_closed_ids.contains(blocker_id.as_str()) {
+                children_map
+                    .entry(blocker_id.as_str())
                     .or_default()
                     .push(bead);
                 has_parent.insert(bead.id.as_str());
