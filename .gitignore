@@ -1,0 +1,16 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# beads viewer local config and caches
+.bv/
+
+# OS files
+.DS_Store
+Thumbs.db
