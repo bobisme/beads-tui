@@ -13,6 +13,8 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use nix::sys::signal::{self, Signal};
+use nix::unistd::Pid;
 use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 use crate::data::{build_tree_order, Bead, BeadStatus, BeadStore, BrCli};
@@ -181,6 +183,11 @@ impl App {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('c') if ctrl => {
                 self.should_quit = true;
+            }
+
+            // Suspend (Ctrl+Z)
+            KeyCode::Char('z') if ctrl => {
+                return Err(anyhow::anyhow!("__SUSPEND__"));
             }
 
             // Navigation - single line (focus-aware)
@@ -476,6 +483,28 @@ pub async fn run(db_path: PathBuf, refresh_secs: u64) -> Result<()> {
     result
 }
 
+/// Suspend the process (Ctrl+Z behavior)
+fn suspend(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+    // Restore terminal to normal state before suspending
+    restore_terminal(terminal)?;
+
+    // Send SIGTSTP to ourselves to suspend
+    signal::kill(Pid::this(), Signal::SIGTSTP)?;
+
+    // When we resume (after fg), re-setup the terminal
+    // Note: setup_terminal creates a new terminal, but we need to reinitialize the existing one
+    enable_raw_mode().context("Failed to enable raw mode after resume")?;
+    execute!(
+        terminal.backend_mut(),
+        EnterAlternateScreen,
+        EnableMouseCapture
+    )
+    .context("Failed to enter alternate screen after resume")?;
+    terminal.clear()?;
+
+    Ok(())
+}
+
 async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> Result<()> {
     let tick_rate = Duration::from_millis(100);
 
@@ -520,7 +549,13 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         if let Some(event) = event::poll_event(tick_rate)? {
             match event {
                 Event::Key(key) => {
-                    app.handle_key(key)?;
+                    match app.handle_key(key) {
+                        Ok(()) => {}
+                        Err(e) if e.to_string() == "__SUSPEND__" => {
+                            suspend(terminal)?;
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
                 Event::Mouse(mouse) => {
                     app.handle_mouse(mouse)?;

@@ -24,7 +24,7 @@ pub enum Focus {
 }
 
 /// Minimum width to show both panes
-const MIN_DUAL_PANE_WIDTH: u16 = 80;
+const MIN_DUAL_PANE_WIDTH: u16 = 60;
 
 /// Render the main application layout
 /// Returns (list_area, detail_area) for mouse handling
