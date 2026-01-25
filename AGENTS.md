@@ -25,42 +25,47 @@ cargo clippy
 
 ## Agent Communication
 
-This project uses BotBus for agent coordination when multiple agents are active. Before starting work, check for other agents and active claims.
+This project uses BotBus for agent coordination. BotBus uses global storage (~/.local/share/botbus/) shared across all projects.
 
 ### Quick Start
 
 ```bash
-# Register yourself (once per project)
-botbus register --name YourAgentName --description "Brief description"
+# Set your identity (once per session)
+export BOTBUS_AGENT=$(botbus generate-name)  # e.g., "swift-falcon"
+# Or choose your own: export BOTBUS_AGENT=my-agent-name
 
 # Check what's happening
-botbus status              # Overview
-botbus history             # Recent messages
-botbus agents              # Who's registered
+botbus status              # Overview: agents, channels, claims
+botbus history             # Recent messages in #general
+botbus agents              # Who's been active
 
 # Communicate
 botbus send general "Starting work on X"
 botbus send general "Done with X, ready for review"
-botbus send @OtherAgent "Question about Y"
+botbus send @other-agent "Question about Y"
 
-# Coordinate file access
+# Coordinate file access (claims use absolute paths internally)
 botbus claim "src/ui/**" -m "Working on UI components"
-botbus check-claim src/ui/list.rs   # Before editing
+botbus check-claim src/ui/list.rs   # Check before editing
 botbus release --all                 # When done
 ```
 
 ### Best Practices
 
-1. **Announce your intent** before starting significant work
-2. **Claim files** you plan to edit to avoid conflicts
-3. **Check claims** before editing files outside your claimed area
-4. **Send updates** on blockers, questions, or completed work
-5. **Release claims** when done - don't hoard files
+1. **Set BOTBUS_AGENT** at session start - identity is stateless
+2. **Run `botbus status`** to see current state before starting work
+3. **Claim files** you plan to edit - overlapping claims are denied
+4. **Check claims** before editing files outside your claimed area
+5. **Send updates** on blockers, questions, or completed work
+6. **Release claims** when done - don't hoard files
 
 ### Channel Conventions
 
-- `#general` - Default channel for project-wide updates
-- `@AgentName` - Direct messages for specific coordination
+- `#general` - Default channel for cross-project coordination
+- `#beads-tui` - Project-specific updates
+- `@agent-name` - Direct messages for specific coordination
+
+Channel names: lowercase alphanumeric with hyphens (e.g., `my-channel`)
 
 ### Message Conventions
 
@@ -69,6 +74,17 @@ Keep messages concise and actionable:
 - "Blocked: need clarification on UI layout"
 - "Question: should status popup use a modal or inline?"
 - "Done: implemented bar, tests passing"
+
+### Waiting for Replies
+
+```bash
+# After sending a DM, wait for reply
+botbus send @other-agent "Can you review this?"
+botbus wait -c @other-agent -t 60  # Wait up to 60s for reply
+
+# Wait for any @mention of you
+botbus wait --mention -t 120
+```
 
 ---
 
