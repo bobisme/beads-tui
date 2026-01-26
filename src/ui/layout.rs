@@ -45,6 +45,8 @@ pub fn render_layout(
     search_text: &str,
     search_cursor: usize,
     create_modal: &CreateModal,
+    reason_text: &str,
+    reason_cursor: usize,
 ) -> (Rect, Rect) {
     let area = frame.area();
     let is_narrow = area.width < MIN_DUAL_PANE_WIDTH;
@@ -119,6 +121,20 @@ pub fn render_layout(
         render_create_modal(frame, area, theme, create_modal);
     }
 
+    // Render reason input modal if closing or reopening
+    if input_mode == InputMode::ClosingBead {
+        render_reason_modal(frame, area, theme, "Close Bead", reason_text, reason_cursor);
+    } else if input_mode == InputMode::ReopeningBead {
+        render_reason_modal(
+            frame,
+            area,
+            theme,
+            "Reopen Bead",
+            reason_text,
+            reason_cursor,
+        );
+    }
+
     (list_area, detail_area)
 }
 
@@ -142,10 +158,13 @@ fn render_footer(
     let keys: Vec<(&str, &str)> = match input_mode {
         InputMode::Search => vec![("Esc", "cancel"), ("Enter", "confirm")],
         InputMode::Creating => vec![("Esc", "cancel"), ("Tab", "next field"), ("C-s", "create")],
+        InputMode::ClosingBead | InputMode::ReopeningBead => {
+            vec![("Esc", "cancel"), ("Enter", "confirm")]
+        }
         InputMode::Normal if show_detail && focus == Focus::Detail => vec![
             ("j/k", "scroll"),
             ("Esc/h", "close"),
-            ("s", "status"),
+            ("x", "close/reopen"),
             ("?", "help"),
             ("q", "quit"),
         ],
@@ -153,7 +172,6 @@ fn render_footer(
             ("j/k", "nav"),
             ("Enter/l", "open"),
             ("a", "add"),
-            ("s", "status"),
             ("c", closed_label),
             ("/", "filter"),
             ("?", "help"),
@@ -265,8 +283,8 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
             Span::raw("Add new task"),
         ]),
         Line::from(vec![
-            Span::styled("s            ", Style::default().fg(theme.accent)),
-            Span::raw("Cycle status"),
+            Span::styled("x            ", Style::default().fg(theme.accent)),
+            Span::raw("Close/reopen (detail pane)"),
         ]),
         Line::from(vec![
             Span::styled("c            ", Style::default().fg(theme.accent)),
@@ -312,4 +330,65 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         .style(Style::default().bg(theme.bg));
 
     frame.render_widget(help, help_area);
+}
+
+fn render_reason_modal(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    theme: &Theme,
+    title: &str,
+    text: &str,
+    cursor: usize,
+) {
+    // Center a modal
+    let width = 60.min(area.width.saturating_sub(4));
+    let height = 7;
+    let x = (area.width - width) / 2;
+    let y = (area.height - height) / 2;
+    let modal_area = Rect::new(x, y, width, height);
+
+    // Clear the area
+    frame.render_widget(Clear, modal_area);
+
+    // Split into input area and hint area
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Input field
+            Constraint::Length(1), // Padding
+            Constraint::Length(1), // Hint
+        ])
+        .split(modal_area);
+
+    // Input text with cursor
+    let (before, after) = text.split_at(cursor.min(text.len()));
+    let input_spans = vec![
+        Span::raw(before),
+        Span::styled("\u{2588}", Style::default().fg(theme.accent)), // Block cursor
+        Span::raw(after),
+    ];
+
+    let input = Paragraph::new(Line::from(input_spans))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_set(border::ROUNDED)
+                .border_style(Style::default().fg(theme.accent))
+                .title(format!(" {} ", title))
+                .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),
+        )
+        .style(Style::default().bg(theme.bg).fg(theme.fg));
+
+    frame.render_widget(input, chunks[0]);
+
+    // Hint text
+    let hint = Paragraph::new(Line::from(vec![
+        Span::styled("Enter", Style::default().fg(theme.accent)),
+        Span::raw(" to confirm | "),
+        Span::styled("Esc", Style::default().fg(theme.accent)),
+        Span::raw(" to cancel"),
+    ]))
+    .style(Style::default().fg(theme.muted));
+
+    frame.render_widget(hint, chunks[2]);
 }

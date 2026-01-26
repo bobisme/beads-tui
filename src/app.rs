@@ -31,6 +31,8 @@ pub enum InputMode {
     Normal,
     Search,
     Creating,
+    ClosingBead,
+    ReopeningBead,
 }
 
 /// Application state
@@ -55,6 +57,8 @@ pub struct App {
     search_input: TextInput,
     /// Create modal state
     create_modal: CreateModal,
+    /// Reason input for closing/reopening beads
+    reason_input: TextInput,
     /// Show help overlay
     show_help: bool,
     /// Hide closed beads
@@ -89,6 +93,7 @@ impl App {
             input_mode: InputMode::Normal,
             search_input: TextInput::new(),
             create_modal: CreateModal::new(),
+            reason_input: TextInput::new(),
             show_help: false,
             hide_closed: true, // Start with closed beads hidden
             show_detail: false, // Start with only list visible
@@ -137,7 +142,7 @@ impl App {
             return Ok(());
         }
 
-        // Input mode handling (search or create)
+        // Input mode handling (search, create, close/reopen)
         match self.input_mode {
             InputMode::Search => {
                 match key.code {
@@ -171,6 +176,40 @@ impl App {
                         self.input_mode = InputMode::Normal;
                     }
                     ModalAction::None => {}
+                }
+                return Ok(());
+            }
+            InputMode::ClosingBead => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.input_mode = InputMode::Normal;
+                        self.reason_input.clear();
+                    }
+                    KeyCode::Enter => {
+                        self.close_bead()?;
+                        self.input_mode = InputMode::Normal;
+                        self.reason_input.clear();
+                    }
+                    _ => {
+                        self.reason_input.handle_key(key);
+                    }
+                }
+                return Ok(());
+            }
+            InputMode::ReopeningBead => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.input_mode = InputMode::Normal;
+                        self.reason_input.clear();
+                    }
+                    KeyCode::Enter => {
+                        self.reopen_bead()?;
+                        self.input_mode = InputMode::Normal;
+                        self.reason_input.clear();
+                    }
+                    _ => {
+                        self.reason_input.handle_key(key);
+                    }
                 }
                 return Ok(());
             }
@@ -302,9 +341,19 @@ impl App {
                 self.show_help = true;
             }
 
-            // Status change
-            KeyCode::Char('s') => {
-                self.cycle_status()?;
+            // Close/reopen bead (only when detail pane is focused)
+            KeyCode::Char('x') if self.focus == Focus::Detail => {
+                if let Some(bead) = self.get_selected_bead() {
+                    if bead.status == BeadStatus::Closed {
+                        // Reopen the bead
+                        self.input_mode = InputMode::ReopeningBead;
+                        self.reason_input.clear();
+                    } else {
+                        // Close the bead
+                        self.input_mode = InputMode::ClosingBead;
+                        self.reason_input.clear();
+                    }
+                }
             }
 
             // Toggle closed visibility
@@ -383,31 +432,46 @@ impl App {
         Ok(())
     }
 
-    /// Cycle the status of the selected bead
-    fn cycle_status(&mut self) -> Result<()> {
-        if let Some(idx) = self.list_state.selected() {
-            let filter = self.filter().map(|s| s.to_lowercase());
-            let filtered: Vec<_> = self
-                .beads
-                .iter()
-                .filter(|b| {
-                    filter
-                        .as_ref()
-                        .map(|f| b.title.to_lowercase().contains(f))
-                        .unwrap_or(true)
-                })
-                .collect();
+    /// Get the currently selected bead
+    fn get_selected_bead(&self) -> Option<&Bead> {
+        let idx = self.list_state.selected()?;
+        let tree_order = build_tree_order(&self.beads, self.hide_closed, self.filter());
+        tree_order.get(idx).map(|(bead, _)| *bead)
+    }
 
-            if let Some(bead) = filtered.get(idx) {
-                let new_status = match bead.status {
-                    BeadStatus::Open => "in_progress",
-                    BeadStatus::InProgress => "closed",
-                    BeadStatus::Blocked => "open",
-                    BeadStatus::Closed => "open",
-                };
-                BrCli::update_status(&bead.id, new_status)?;
-                self.refresh()?;
+    /// Close the selected bead with a reason
+    fn close_bead(&mut self) -> Result<()> {
+        if let Some(bead) = self.get_selected_bead() {
+            let id = bead.id.clone();
+            let reason = self.reason_input.text();
+            let reason_opt = if reason.is_empty() {
+                None
+            } else {
+                Some(reason)
+            };
+            BrCli::close(&id, reason_opt)?;
+            self.refresh()?;
+        }
+        Ok(())
+    }
+
+    /// Reopen the selected bead with a reason
+    fn reopen_bead(&mut self) -> Result<()> {
+        if let Some(bead) = self.get_selected_bead() {
+            let id = bead.id.clone();
+            let reason = self.reason_input.text();
+            let reason_opt = if reason.is_empty() {
+                None
+            } else {
+                Some(reason)
+            };
+            // Use update_status to set back to open and add a comment with the reason
+            BrCli::update_status(&id, "open")?;
+            if let Some(r) = reason_opt {
+                // Add the reason as a comment
+                let _ = BrCli::add_comment(&id, &format!("Reopened: {}", r));
             }
+            self.refresh()?;
         }
         Ok(())
     }
@@ -520,6 +584,8 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         let input_mode = app.input_mode;
         let search_text = app.search_input.text().to_string();
         let search_cursor = app.search_input.cursor();
+        let reason_text = app.reason_input.text().to_string();
+        let reason_cursor = app.reason_input.cursor();
 
         // Draw
         terminal.draw(|frame| {
@@ -539,6 +605,8 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
                 &search_text,
                 search_cursor,
                 &app.create_modal,
+                &reason_text,
+                reason_cursor,
             );
             // Store areas for mouse handling
             app.list_area = list_area;
