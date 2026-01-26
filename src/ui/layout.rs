@@ -123,13 +123,20 @@ pub fn render_layout(
 
     // Render reason input modal if closing or reopening
     if input_mode == InputMode::ClosingBead {
-        render_reason_modal(frame, area, theme, "Close Bead", reason_text, reason_cursor);
+        render_reason_modal(
+            frame,
+            area,
+            theme,
+            "Close Bead - Enter Reason",
+            reason_text,
+            reason_cursor,
+        );
     } else if input_mode == InputMode::ReopeningBead {
         render_reason_modal(
             frame,
             area,
             theme,
-            "Reopen Bead",
+            "Reopen Bead - Enter Reason",
             reason_text,
             reason_cursor,
         );
@@ -340,25 +347,15 @@ fn render_reason_modal(
     text: &str,
     cursor: usize,
 ) {
-    // Center a modal
+    // Center a modal (just the input field, no outer border)
     let width = 60.min(area.width.saturating_sub(4));
-    let height = 7;
+    let height = 3; // Just the input field
     let x = (area.width - width) / 2;
     let y = (area.height - height) / 2;
     let modal_area = Rect::new(x, y, width, height);
 
     // Clear the area
     frame.render_widget(Clear, modal_area);
-
-    // Split into input area and hint area
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Input field
-            Constraint::Length(1), // Padding
-            Constraint::Length(1), // Hint
-        ])
-        .split(modal_area);
 
     // Input text with cursor
     let (before, after) = text.split_at(cursor.min(text.len()));
@@ -379,16 +376,5 @@ fn render_reason_modal(
         )
         .style(Style::default().bg(theme.bg).fg(theme.fg));
 
-    frame.render_widget(input, chunks[0]);
-
-    // Hint text
-    let hint = Paragraph::new(Line::from(vec![
-        Span::styled("Enter", Style::default().fg(theme.focused_border)), // Green for keys
-        Span::raw(" to confirm | "),
-        Span::styled("Esc", Style::default().fg(theme.focused_border)), // Green for keys
-        Span::raw(" to cancel"),
-    ]))
-    .style(Style::default().fg(theme.muted));
-
-    frame.render_widget(hint, chunks[2]);
+    frame.render_widget(input, modal_area);
 }
