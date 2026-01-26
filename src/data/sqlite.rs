@@ -59,6 +59,7 @@ impl BeadStore {
         }
 
         // Sort by status (open/in_progress first), then by priority
+        // For closed beads, sort by closed_at (most recent first)
         beads.sort_by(|a, b| {
             let status_ord = |s: &BeadStatus| match s {
                 BeadStatus::InProgress => 0,
@@ -66,10 +67,23 @@ impl BeadStore {
                 BeadStatus::Blocked => 2,
                 BeadStatus::Closed => 3,
             };
-            status_ord(&a.status)
-                .cmp(&status_ord(&b.status))
-                .then(a.priority.cmp(&b.priority))
-                .then(a.title.cmp(&b.title))
+            let status_cmp = status_ord(&a.status).cmp(&status_ord(&b.status));
+
+            // If both are closed, sort by closed_at (most recent first)
+            if a.status == BeadStatus::Closed && b.status == BeadStatus::Closed {
+                // Compare closed_at in reverse (None sorts to end)
+                match (&b.closed_at, &a.closed_at) {
+                    (Some(b_time), Some(a_time)) => b_time.cmp(a_time),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => a.title.cmp(&b.title),
+                }
+            } else {
+                // For non-closed beads, sort by priority then title
+                status_cmp
+                    .then(a.priority.cmp(&b.priority))
+                    .then(a.title.cmp(&b.title))
+            }
         });
 
         Ok(beads)

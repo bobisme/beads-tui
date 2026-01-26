@@ -354,6 +354,7 @@ pub fn build_tree_order<'a>(
     }
 
     // Add closed beads flat at the end (depth 0)
+    // They're already sorted by closed_at from sqlite.rs, so just append in order
     for bead in closed {
         result.push((bead, 0));
     }
