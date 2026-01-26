@@ -364,7 +364,7 @@ fn render_reason_modal(
     let (before, after) = text.split_at(cursor.min(text.len()));
     let input_spans = vec![
         Span::raw(before),
-        Span::styled("\u{2588}", Style::default().fg(theme.accent)), // Block cursor
+        Span::styled("\u{2588}", Style::default().fg(theme.focused_border)), // Block cursor - green
         Span::raw(after),
     ];
 
@@ -373,7 +373,7 @@ fn render_reason_modal(
             Block::default()
                 .borders(Borders::ALL)
                 .border_set(border::ROUNDED)
-                .border_style(Style::default().fg(theme.accent))
+                .border_style(Style::default().fg(theme.focused_border)) // Green border
                 .title(format!(" {} ", title))
                 .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),
         )
@@ -383,9 +383,9 @@ fn render_reason_modal(
 
     // Hint text
     let hint = Paragraph::new(Line::from(vec![
-        Span::styled("Enter", Style::default().fg(theme.accent)),
+        Span::styled("Enter", Style::default().fg(theme.focused_border)), // Green for keys
         Span::raw(" to confirm | "),
-        Span::styled("Esc", Style::default().fg(theme.accent)),
+        Span::styled("Esc", Style::default().fg(theme.focused_border)), // Green for keys
         Span::raw(" to cancel"),
     ]))
     .style(Style::default().fg(theme.muted));
