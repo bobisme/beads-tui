@@ -190,6 +190,23 @@ Examples:
 - `docs: update README with installation instructions`
 - `refactor(ui): extract theme colors to separate module`
 
+### Semantic Versioning
+
+**IMPORTANT**: Update the version in `Cargo.toml` according to [semver](https://semver.org/) for every commit to main:
+
+- **MAJOR** (x.0.0): Breaking changes (incompatible API changes, major UI overhauls)
+- **MINOR** (0.x.0): New features (backward-compatible functionality additions)
+  - Examples: `feat(ui):`, `feat(data):`, new commands, new UI panels
+- **PATCH** (0.0.x): Bug fixes and minor improvements (backward-compatible bug fixes)
+  - Examples: `fix():`, `refactor():`, `docs():`, `style():`
+
+When in doubt:
+- Adding features → bump MINOR
+- Fixing bugs/refactoring → bump PATCH
+- Breaking existing behavior → bump MAJOR (use sparingly)
+
+**Update `Cargo.toml` version in the same commit** where you make the changes.
+
 ---
 
 ## Code Style
