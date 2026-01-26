@@ -205,6 +205,22 @@ fn render_footer(
         ));
     }
 
+    // Calculate left side text width to see if we have room for version
+    let left_text = Line::from(spans.clone());
+    let left_width = left_text.width() as u16;
+
+    // Version info (right-aligned if there's room)
+    let version = env!("CARGO_PKG_VERSION");
+    let version_text = format!("beads-tui {}", version);
+    let version_width = version_text.len() as u16;
+
+    // Only show version if there's at least 5 chars of padding between left and right
+    if left_width + version_width + 5 <= area.width {
+        let padding_width = area.width.saturating_sub(left_width + version_width);
+        spans.push(Span::raw(" ".repeat(padding_width as usize)));
+        spans.push(Span::styled(version_text, Style::default().fg(theme.muted)));
+    }
+
     let footer = Paragraph::new(Line::from(spans));
     frame.render_widget(footer, area);
 }
