@@ -270,11 +270,12 @@ impl App {
                 Focus::List => self.list_state.first(),
                 Focus::Detail => self.detail_state.reset(),
             },
-            KeyCode::End => {
-                self.list_state.last(self.filtered_len());
-            }
-            KeyCode::Char('G') => {
-                self.list_state.last(self.filtered_len());
+            KeyCode::End | KeyCode::Char('G') => match self.focus {
+                Focus::List => self.list_state.last(self.filtered_len()),
+                Focus::Detail => {
+                    // Scroll to a very large number - ratatui will clamp it
+                    self.detail_state.scroll_down(10000);
+                }
             }
 
             // Open detail pane
