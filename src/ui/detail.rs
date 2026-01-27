@@ -35,8 +35,9 @@ impl DetailState {
 
     /// Scroll down by n lines
     pub fn scroll_down(&mut self, n: u16) {
-        let max_scroll = self.content_height.saturating_sub(self.viewport_height);
-        self.scroll = (self.scroll + n).min(max_scroll);
+        // Don't limit scrolling - let ratatui handle bounds
+        // (calculating true content height with wrapping is complex)
+        self.scroll = self.scroll.saturating_add(n);
     }
 
     /// Reset scroll to top
