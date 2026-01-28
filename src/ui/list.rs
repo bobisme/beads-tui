@@ -88,6 +88,7 @@ pub struct BeadList<'a> {
     focused: bool,
     filter: Option<&'a str>,
     hide_closed: bool,
+    show_labels: bool,
 }
 
 impl<'a> BeadList<'a> {
@@ -98,6 +99,7 @@ impl<'a> BeadList<'a> {
             focused: true,
             filter: None,
             hide_closed: false,
+            show_labels: false,
         }
     }
 
@@ -113,6 +115,11 @@ impl<'a> BeadList<'a> {
 
     pub fn hide_closed(mut self, hide: bool) -> Self {
         self.hide_closed = hide;
+        self
+    }
+
+    pub fn show_labels(mut self, show: bool) -> Self {
+        self.show_labels = show;
         self
     }
 
@@ -139,7 +146,7 @@ impl<'a> BeadList<'a> {
         // Indentation: 2 spaces per depth level
         let indent = "  ".repeat(depth);
 
-        let line = Line::from(vec![
+        let mut spans = vec![
             Span::raw(indent),
             Span::styled(format!("{} ", type_icon), Style::default().fg(icon_color)),
             Span::styled(
@@ -149,7 +156,22 @@ impl<'a> BeadList<'a> {
             Span::styled(bead.id.clone(), Style::default().fg(self.theme.muted)),
             Span::raw(": "),
             Span::styled(bead.title.clone(), Style::default().fg(self.theme.fg)),
-        ]);
+        ];
+
+        if self.show_labels && !bead.labels.is_empty() {
+            spans.push(Span::raw(" "));
+            for (idx, label) in bead.labels.iter().enumerate() {
+                if idx > 0 {
+                    spans.push(Span::raw(" "));
+                }
+                spans.push(Span::styled(
+                    format!("[{}]", label),
+                    Style::default().fg(self.theme.muted),
+                ));
+            }
+        }
+
+        let line = Line::from(spans);
 
         ListItem::new(line)
     }

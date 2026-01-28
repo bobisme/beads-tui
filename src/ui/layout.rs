@@ -40,6 +40,7 @@ pub fn render_layout(
     filter: Option<&str>,
     show_help: bool,
     hide_closed: bool,
+    show_labels: bool,
     show_detail: bool,
     input_mode: InputMode,
     search_text: &str,
@@ -84,7 +85,8 @@ pub fn render_layout(
         let list = BeadList::new(beads, theme)
             .focused(focus == Focus::List)
             .filter(filter)
-            .hide_closed(hide_closed);
+            .hide_closed(hide_closed)
+            .show_labels(show_labels);
         frame.render_stateful_widget(list, list_area, list_state);
     }
 
@@ -172,6 +174,7 @@ fn render_footer(
             ("j/k", "scroll"),
             ("Esc/h", "close"),
             ("x", "close/reopen"),
+            ("L", "labels"),
             ("?", "help"),
             ("q", "quit"),
         ],
@@ -180,6 +183,7 @@ fn render_footer(
             ("Enter/l", "open"),
             ("a", "add"),
             ("c", closed_label),
+            ("L", "labels"),
             ("/", "filter"),
             ("?", "help"),
             ("q", "quit"),
@@ -288,6 +292,10 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         Line::from(vec![
             Span::styled("a            ", Style::default().fg(theme.accent)),
             Span::raw("Add new task"),
+        ]),
+        Line::from(vec![
+            Span::styled("L            ", Style::default().fg(theme.accent)),
+            Span::raw("Toggle labels"),
         ]),
         Line::from(vec![
             Span::styled("x            ", Style::default().fg(theme.accent)),

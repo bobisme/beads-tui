@@ -59,6 +59,8 @@ pub struct App {
     create_modal: CreateModal,
     /// Reason input for closing/reopening beads
     reason_input: TextInput,
+    /// Show labels in list view
+    show_labels: bool,
     /// Show help overlay
     show_help: bool,
     /// Hide closed beads
@@ -94,6 +96,7 @@ impl App {
             search_input: TextInput::new(),
             create_modal: CreateModal::new(),
             reason_input: TextInput::new(),
+            show_labels: false,
             show_help: false,
             hide_closed: true, // Start with closed beads hidden
             show_detail: false, // Start with only list visible
@@ -303,10 +306,10 @@ impl App {
             }
 
             // Pane resizing (only when detail is shown)
-            KeyCode::Char('<') | KeyCode::Char('H') if self.show_detail => {
+            KeyCode::Char('<') if self.show_detail => {
                 self.split_percent = self.split_percent.saturating_sub(5).max(20);
             }
-            KeyCode::Char('>') | KeyCode::Char('L') if self.show_detail => {
+            KeyCode::Char('>') if self.show_detail => {
                 self.split_percent = (self.split_percent + 5).min(80);
             }
 
@@ -330,6 +333,11 @@ impl App {
             // Theme
             KeyCode::Char('t') => {
                 self.theme_idx = (self.theme_idx + 1) % THEMES.len();
+            }
+
+            // Toggle labels in list view
+            KeyCode::Char('L') => {
+                self.show_labels = !self.show_labels;
             }
 
             // Refresh
@@ -581,6 +589,7 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         let filter = app.filter().map(|s| s.to_string());
         let show_help = app.show_help;
         let hide_closed = app.hide_closed;
+        let show_labels = app.show_labels;
         let show_detail = app.show_detail;
         let input_mode = app.input_mode;
         let search_text = app.search_input.text().to_string();
@@ -601,6 +610,7 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
                 filter.as_deref(),
                 show_help,
                 hide_closed,
+                show_labels,
                 show_detail,
                 input_mode,
                 &search_text,
