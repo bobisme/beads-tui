@@ -96,7 +96,7 @@ impl App {
             search_input: TextInput::new(),
             create_modal: CreateModal::new(),
             reason_input: TextInput::new(),
-            show_labels: false,
+            show_labels: true,
             show_help: false,
             hide_closed: true, // Start with closed beads hidden
             show_detail: false, // Start with only list visible

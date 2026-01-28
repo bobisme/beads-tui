@@ -5,7 +5,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget},
@@ -99,7 +99,7 @@ impl<'a> BeadList<'a> {
             focused: true,
             filter: None,
             hide_closed: false,
-            show_labels: false,
+            show_labels: true,
         }
     }
 
@@ -166,7 +166,7 @@ impl<'a> BeadList<'a> {
                 }
                 spans.push(Span::styled(
                     format!("[{}]", label),
-                    Style::default().fg(self.theme.muted),
+                    Style::default().fg(Color::Yellow),
                 ));
             }
         }
