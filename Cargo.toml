@@ -1,6 +1,6 @@
 [package]
 name = "beads-tui"
-version = "0.6.2"
+version = "0.7.0"
 edition = "2021"
 description = "A TUI for viewing and managing beads (issues)"
 license = "MIT"
@@ -15,6 +15,7 @@ path = "src/main.rs"
 # TUI framework
 ratatui = "0.29"
 crossterm = "0.28"
+tui-textarea = "0.7"
 
 # Async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

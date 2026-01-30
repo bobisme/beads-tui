@@ -18,12 +18,12 @@ use ratatui::{
     style::{Modifier, Style},
     symbols::border,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
+use tui_textarea::TextArea;
 
 use crate::data::BeadType;
-use crate::ui::input::TextInput;
 use crate::ui::Theme;
 
 /// Which field is focused in the create modal
@@ -60,22 +60,36 @@ impl CreateField {
 }
 
 /// State for the create bead modal
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CreateModal {
     /// Currently focused field
     pub focus: CreateField,
     /// Title input
-    pub title: TextInput,
+    pub title: TextArea<'static>,
     /// Description input
-    pub description: TextInput,
+    pub description: TextArea<'static>,
     /// Selected bead type
     pub bead_type: BeadType,
     /// Selected priority (0-4)
     pub priority: u8,
     /// Labels (comma-separated in input, parsed to vec)
-    pub labels: TextInput,
+    pub labels: TextArea<'static>,
     /// Whether the modal is open
     pub open: bool,
+}
+
+impl Default for CreateModal {
+    fn default() -> Self {
+        Self {
+            focus: CreateField::default(),
+            title: TextArea::default(),
+            description: TextArea::default(),
+            bead_type: BeadType::default(),
+            priority: 2,
+            labels: TextArea::default(),
+            open: false,
+        }
+    }
 }
 
 impl CreateModal {
@@ -90,9 +104,9 @@ impl CreateModal {
     pub fn open(&mut self) {
         self.open = true;
         self.focus = CreateField::Title;
-        self.title.clear();
-        self.description.clear();
-        self.labels.clear();
+        self.title = TextArea::default();
+        self.description = TextArea::default();
+        self.labels = TextArea::default();
         self.bead_type = BeadType::Task;
         self.priority = 2;
     }
@@ -104,28 +118,30 @@ impl CreateModal {
 
     /// Check if we can submit (title is required)
     pub fn can_submit(&self) -> bool {
-        !self.title.text().trim().is_empty()
+        !self.title.lines().join("\n").trim().is_empty()
     }
 
     /// Get the title
-    pub fn get_title(&self) -> &str {
-        self.title.text()
+    pub fn get_title(&self) -> String {
+        self.title.lines().join("\n")
     }
 
     /// Get the description (None if empty)
-    pub fn get_description(&self) -> Option<&str> {
-        let desc = self.description.text().trim();
-        if desc.is_empty() {
+    pub fn get_description(&self) -> Option<String> {
+        let desc = self.description.lines().join("\n");
+        let trimmed = desc.trim();
+        if trimmed.is_empty() {
             None
         } else {
-            Some(self.description.text())
+            Some(desc)
         }
     }
 
     /// Get labels as a vector
     pub fn get_labels(&self) -> Vec<String> {
         self.labels
-            .text()
+            .lines()
+            .join("\n")
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
@@ -190,18 +206,12 @@ impl CreateModal {
                 if key.code == KeyCode::Enter {
                     self.focus = CreateField::Description;
                 } else {
-                    self.title.handle_key(key);
+                    self.title.input(key);
                 }
             }
             CreateField::Description => {
                 // Allow Enter for newlines in description
-                if key.code == KeyCode::Enter {
-                    // Insert newline
-                    self.description
-                        .handle_key(KeyEvent::new(KeyCode::Char('\n'), KeyModifiers::NONE));
-                } else {
-                    self.description.handle_key(key);
-                }
+                self.description.input(key);
             }
             CreateField::Type => {
                 // Cycle through types with left/right or j/k
@@ -234,7 +244,10 @@ impl CreateModal {
                 }
             }
             CreateField::Labels => {
-                self.labels.handle_key(key);
+                // Don't allow newlines in labels field
+                if key.code != KeyCode::Enter {
+                    self.labels.input(key);
+                }
             }
         }
     }
@@ -308,30 +321,20 @@ fn render_title_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Crea
         theme.border
     };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_set(border::ROUNDED)
-        .border_style(Style::default().fg(border_color))
-        .title(" Title ")
-        .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    // Render input with cursor
-    let text = modal.title.text();
-    let cursor = modal.title.cursor();
-    let line = if focused {
-        render_input_with_cursor(text, cursor, theme)
-    } else {
-        Line::from(Span::styled(
-            text.to_string(),
-            Style::default().fg(theme.fg),
-        ))
-    };
-
-    let para = Paragraph::new(line);
-    frame.render_widget(para, inner);
+    let mut textarea = modal.title.clone();
+    textarea.set_block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_set(border::ROUNDED)
+            .border_style(Style::default().fg(border_color))
+            .title(" Title ")
+            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
+    );
+    textarea.set_style(Style::default().fg(theme.fg));
+    if !focused {
+        textarea.set_cursor_style(Style::default());
+    }
+    frame.render_widget(&textarea, area);
 }
 
 fn render_description_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &CreateModal) {
@@ -349,38 +352,20 @@ fn render_description_field(frame: &mut Frame, area: Rect, theme: &Theme, modal:
         " Description "
     };
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_set(border::ROUNDED)
-        .border_style(Style::default().fg(border_color))
-        .title(title)
-        .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    // Render multi-line input
-    let text = modal.description.text();
-    let cursor = modal.description.cursor();
-
-    if focused {
-        // For multi-line, we need to handle cursor position across lines
-        let (before, after) = text.split_at(cursor.min(text.len()));
-        let mut content = before.to_string();
-        content.push('\u{2588}'); // Block cursor
-        // Skip first character of after (covered by cursor)
-        content.push_str(&after.chars().skip(1).collect::<String>());
-
-        let para = Paragraph::new(content)
-            .style(Style::default().fg(theme.fg))
-            .wrap(Wrap { trim: false });
-        frame.render_widget(para, inner);
-    } else {
-        let para = Paragraph::new(text)
-            .style(Style::default().fg(theme.fg))
-            .wrap(Wrap { trim: false });
-        frame.render_widget(para, inner);
+    let mut textarea = modal.description.clone();
+    textarea.set_block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_set(border::ROUNDED)
+            .border_style(Style::default().fg(border_color))
+            .title(title)
+            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
+    );
+    textarea.set_style(Style::default().fg(theme.fg));
+    if !focused {
+        textarea.set_cursor_style(Style::default());
     }
+    frame.render_widget(&textarea, area);
 }
 
 fn render_options_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &CreateModal) {
@@ -443,52 +428,22 @@ fn render_options_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Cr
 
     // Labels
     spans.push(Span::styled("Labels: ", Style::default().fg(theme.muted)));
-    if labels_focused {
-        // Show input with cursor
-        let text = modal.labels.text();
-        let cursor = modal.labels.cursor();
-        let (before, after) = text.split_at(cursor.min(text.len()));
-        spans.push(Span::styled(
-            before.to_string(),
-            Style::default().fg(theme.fg),
-        ));
-        spans.push(Span::styled(
-            "\u{2588}".to_string(),
-            Style::default().fg(theme.accent),
-        ));
-        // Skip first character of after (covered by cursor)
-        let rest = after.chars().skip(1).collect::<String>();
-        if !rest.is_empty() {
-            spans.push(Span::styled(
-                rest,
-                Style::default().fg(theme.fg),
-            ));
-        }
+    let labels_text = modal.labels.lines().join("\n");
+    let display_text = if labels_text.is_empty() {
+        "(none)".to_string()
     } else {
-        let labels_text = if modal.labels.is_empty() {
-            "(none)".to_string()
-        } else {
-            modal.labels.text().to_string()
-        };
-        spans.push(Span::styled(labels_text, Style::default().fg(theme.fg)));
-    }
+        labels_text
+    };
+
+    let label_style = if labels_focused {
+        Style::default().fg(theme.accent)
+    } else {
+        Style::default().fg(theme.fg)
+    };
+    spans.push(Span::styled(display_text, label_style));
 
     let line = Line::from(spans);
     let para = Paragraph::new(line);
     frame.render_widget(para, inner);
 }
 
-fn render_input_with_cursor<'a>(text: &str, cursor: usize, theme: &Theme) -> Line<'a> {
-    let (before, after) = text.split_at(cursor.min(text.len()));
-    let mut spans = vec![Span::styled(before.to_string(), Style::default().fg(theme.fg))];
-
-    // Cursor replaces the character at cursor position
-    spans.push(Span::styled("\u{2588}".to_string(), Style::default().fg(theme.accent)));
-
-    // Skip first character of after (covered by cursor)
-    if let Some(rest) = after.chars().skip(1).collect::<String>().into() {
-        spans.push(Span::styled(rest, Style::default().fg(theme.fg)));
-    }
-
-    Line::from(spans)
-}

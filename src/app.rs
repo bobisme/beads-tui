@@ -21,8 +21,9 @@ use crate::data::{build_tree_order, Bead, BeadStatus, BeadStore, BrCli};
 use crate::event;
 use crate::ui::layout::Focus;
 use crate::ui::{
-    render_layout, BeadListState, CreateModal, DetailState, ModalAction, TextInput, Theme, THEMES,
+    render_layout, BeadListState, CreateModal, DetailState, ModalAction, Theme, THEMES,
 };
+use tui_textarea::TextArea;
 
 /// Input mode for the application
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,11 +55,11 @@ pub struct App {
     /// Current input mode
     input_mode: InputMode,
     /// Text input for search
-    search_input: TextInput,
+    search_input: TextArea<'static>,
     /// Create modal state
     create_modal: CreateModal,
     /// Reason input for closing/reopening beads
-    reason_input: TextInput,
+    reason_input: TextArea<'static>,
     /// Show labels in list view
     show_labels: bool,
     /// Show help overlay
@@ -93,9 +94,9 @@ impl App {
             focus: Focus::List,
             split_percent: 40,
             input_mode: InputMode::Normal,
-            search_input: TextInput::new(),
+            search_input: TextArea::default(),
             create_modal: CreateModal::new(),
-            reason_input: TextInput::new(),
+            reason_input: TextArea::default(),
             show_labels: true,
             show_help: false,
             hide_closed: true,  // Start with closed beads hidden
@@ -122,17 +123,18 @@ impl App {
     }
 
     /// Get the current filter text (if searching or has active filter)
-    fn filter(&self) -> Option<&str> {
-        if !self.search_input.is_empty() {
-            Some(self.search_input.text())
-        } else {
+    fn filter(&self) -> Option<String> {
+        let text = self.search_input.lines().join("\n");
+        if text.is_empty() {
             None
+        } else {
+            Some(text)
         }
     }
 
     /// Get filtered beads count (uses tree order for consistency)
     fn filtered_len(&self) -> usize {
-        build_tree_order(&self.beads, self.hide_closed, self.filter()).len()
+        build_tree_order(&self.beads, self.hide_closed, self.filter().as_deref()).len()
     }
 
     /// Handle a key event
@@ -151,17 +153,17 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.input_mode = InputMode::Normal;
-                        self.search_input.clear();
+                        self.search_input = TextArea::default();
                     }
                     KeyCode::Enter => {
                         self.input_mode = InputMode::Normal;
                         // Keep the filter text in search_input
                     }
                     _ => {
-                        let old_len = self.search_input.text().len();
-                        self.search_input.handle_key(key);
+                        let old_len = self.search_input.lines().join("\n").len();
+                        self.search_input.input(key);
                         // Reset selection when filter changes
-                        if self.search_input.text().len() != old_len {
+                        if self.search_input.lines().join("\n").len() != old_len {
                             self.list_state.first();
                         }
                     }
@@ -186,15 +188,15 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.input_mode = InputMode::Normal;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     }
                     KeyCode::Enter => {
                         self.close_bead()?;
                         self.input_mode = InputMode::Normal;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     }
                     _ => {
-                        self.reason_input.handle_key(key);
+                        self.reason_input.input(key);
                     }
                 }
                 return Ok(());
@@ -203,15 +205,15 @@ impl App {
                 match key.code {
                     KeyCode::Esc => {
                         self.input_mode = InputMode::Normal;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     }
                     KeyCode::Enter => {
                         self.reopen_bead()?;
                         self.input_mode = InputMode::Normal;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     }
                     _ => {
-                        self.reason_input.handle_key(key);
+                        self.reason_input.input(key);
                     }
                 }
                 return Ok(());
@@ -316,12 +318,12 @@ impl App {
             // Search
             KeyCode::Char('/') => {
                 self.input_mode = InputMode::Search;
-                self.search_input.clear();
+                self.search_input = TextArea::default();
             }
 
             // Clear filter (when list focused or no detail)
             KeyCode::Esc if self.focus == Focus::List => {
-                self.search_input.clear();
+                self.search_input = TextArea::default();
             }
 
             // Add new bead
@@ -356,11 +358,11 @@ impl App {
                     if bead.status == BeadStatus::Closed {
                         // Reopen the bead
                         self.input_mode = InputMode::ReopeningBead;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     } else {
                         // Close the bead
                         self.input_mode = InputMode::ClosingBead;
-                        self.reason_input.clear();
+                        self.reason_input = TextArea::default();
                     }
                 }
             }
@@ -444,7 +446,7 @@ impl App {
     /// Get the currently selected bead
     fn get_selected_bead(&self) -> Option<&Bead> {
         let idx = self.list_state.selected()?;
-        let tree_order = build_tree_order(&self.beads, self.hide_closed, self.filter());
+        let tree_order = build_tree_order(&self.beads, self.hide_closed, self.filter().as_deref());
         tree_order.get(idx).map(|(bead, _)| *bead)
     }
 
@@ -452,13 +454,13 @@ impl App {
     fn close_bead(&mut self) -> Result<()> {
         if let Some(bead) = self.get_selected_bead() {
             let id = bead.id.clone();
-            let reason = self.reason_input.text();
+            let reason = self.reason_input.lines().join("\n");
             let reason_opt = if reason.is_empty() {
                 None
             } else {
                 Some(reason)
             };
-            BrCli::close(&id, reason_opt)?;
+            BrCli::close(&id, reason_opt.as_deref())?;
             self.refresh()?;
         }
         Ok(())
@@ -468,7 +470,7 @@ impl App {
     fn reopen_bead(&mut self) -> Result<()> {
         if let Some(bead) = self.get_selected_bead() {
             let id = bead.id.clone();
-            let reason = self.reason_input.text();
+            let reason = self.reason_input.lines().join("\n");
             let reason_opt = if reason.is_empty() {
                 None
             } else {
@@ -592,10 +594,10 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         let show_labels = app.show_labels;
         let show_detail = app.show_detail;
         let input_mode = app.input_mode;
-        let search_text = app.search_input.text().to_string();
-        let search_cursor = app.search_input.cursor();
-        let reason_text = app.reason_input.text().to_string();
-        let reason_cursor = app.reason_input.cursor();
+        let search_text = app.search_input.lines().join("\n").to_string();
+        let search_cursor = app.search_input.cursor().1; // Column position only
+        let reason_text = app.reason_input.lines().join("\n").to_string();
+        let reason_cursor = app.reason_input.cursor().1; // Column position only
 
         // Draw
         terminal.draw(|frame| {
