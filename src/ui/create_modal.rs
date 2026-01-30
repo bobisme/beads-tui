@@ -158,12 +158,18 @@ impl CreateModal {
                 return ModalAction::None;
             }
 
-            // Tab to switch fields (Shift+Tab goes backward)
+            // Tab to switch fields
             KeyCode::Tab if shift => {
+                // Some terminals send Tab with shift modifier
                 self.focus = self.focus.prev();
                 return ModalAction::None;
             }
-            KeyCode::Tab | KeyCode::BackTab => {
+            KeyCode::BackTab => {
+                // Most terminals send BackTab for Shift+Tab
+                self.focus = self.focus.prev();
+                return ModalAction::None;
+            }
+            KeyCode::Tab => {
                 self.focus = self.focus.next();
                 return ModalAction::None;
             }
