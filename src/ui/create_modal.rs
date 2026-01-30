@@ -111,6 +111,35 @@ impl CreateModal {
         self.priority = 2;
     }
 
+    /// Open the modal pre-filled with bead data for editing
+    pub fn open_with_bead(&mut self, bead: &crate::data::Bead) {
+        self.open = true;
+        self.focus = CreateField::Title;
+
+        // Pre-fill title
+        self.title = TextArea::from(vec![bead.title.clone()]);
+
+        // Pre-fill description
+        if let Some(desc) = &bead.description {
+            let lines: Vec<String> = desc.lines().map(|s| s.to_string()).collect();
+            self.description = TextArea::from(lines);
+        } else {
+            self.description = TextArea::default();
+        }
+
+        // Pre-fill labels
+        if !bead.labels.is_empty() {
+            let labels_str = bead.labels.join(", ");
+            self.labels = TextArea::from(vec![labels_str]);
+        } else {
+            self.labels = TextArea::default();
+        }
+
+        // Set type and priority
+        self.bead_type = bead.bead_type;
+        self.priority = bead.priority;
+    }
+
     /// Close the modal
     pub fn close(&mut self) {
         self.open = false;
@@ -331,6 +360,7 @@ fn render_title_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Crea
             .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
     );
     textarea.set_style(Style::default().fg(theme.fg));
+    textarea.set_cursor_line_style(Style::default()); // Disable underline
     if !focused {
         textarea.set_cursor_style(Style::default());
     }
@@ -362,6 +392,7 @@ fn render_description_field(frame: &mut Frame, area: Rect, theme: &Theme, modal:
             .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
     );
     textarea.set_style(Style::default().fg(theme.fg));
+    textarea.set_cursor_line_style(Style::default()); // Disable underline
     if !focused {
         textarea.set_cursor_style(Style::default());
     }

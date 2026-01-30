@@ -124,6 +124,26 @@ impl BrCli {
         Ok(())
     }
 
+    /// Update a generic field on a bead (title, description, type, priority)
+    pub fn update_field(id: &str, field: &str, value: &str) -> Result<()> {
+        let flag = format!("--{}", field);
+        let arg = format!("--{}={}", field, value);
+
+        let output = Command::new("br")
+            .arg("update")
+            .arg(id)
+            .arg(arg)
+            .output()
+            .context(format!("Failed to execute br update {} command", flag))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("br update {} failed: {}", flag, stderr);
+        }
+
+        Ok(())
+    }
+
     /// Add a label to a bead
     pub fn add_label(id: &str, label: &str) -> Result<()> {
         let output = Command::new("br")
@@ -136,6 +156,23 @@ impl BrCli {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("br update --add-label failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    /// Remove a label from a bead
+    pub fn remove_label(id: &str, label: &str) -> Result<()> {
+        let output = Command::new("br")
+            .arg("update")
+            .arg(id)
+            .arg(format!("--remove-label={}", label))
+            .output()
+            .context("Failed to execute br update --remove-label command")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("br update --remove-label failed: {}", stderr);
         }
 
         Ok(())

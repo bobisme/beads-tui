@@ -118,8 +118,8 @@ pub fn render_layout(
         render_help_overlay(frame, area, theme);
     }
 
-    // Render create modal if in creating mode
-    if input_mode == InputMode::Creating {
+    // Render create/edit modal if in creating or editing mode
+    if input_mode == InputMode::Creating || input_mode == InputMode::Editing {
         render_create_modal(frame, area, theme, create_modal);
     }
 
@@ -168,12 +168,14 @@ fn render_footer(
     let keys: Vec<(&str, &str)> = match input_mode {
         InputMode::Search => vec![("Esc", "cancel"), ("Enter", "confirm")],
         InputMode::Creating => vec![("Esc", "cancel"), ("Tab", "next field"), ("C-s", "create")],
+        InputMode::Editing => vec![("Esc", "cancel"), ("Tab", "next field"), ("C-s", "save")],
         InputMode::ClosingBead | InputMode::ReopeningBead => {
             vec![("Esc", "cancel"), ("Enter", "confirm")]
         }
         InputMode::Normal if show_detail && focus == Focus::Detail => vec![
             ("j/k", "scroll"),
             ("Esc/h", "close"),
+            ("e", "edit"),
             ("x", "close/reopen"),
             ("L", "labels"),
             ("?", "help"),

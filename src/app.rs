@@ -32,6 +32,7 @@ pub enum InputMode {
     Normal,
     Search,
     Creating,
+    Editing,
     ClosingBead,
     ReopeningBead,
 }
@@ -58,6 +59,8 @@ pub struct App {
     search_input: TextArea<'static>,
     /// Create modal state
     create_modal: CreateModal,
+    /// ID of bead being edited (if in Editing mode)
+    editing_bead_id: Option<String>,
     /// Reason input for closing/reopening beads
     reason_input: TextArea<'static>,
     /// Show labels in list view
@@ -96,6 +99,7 @@ impl App {
             input_mode: InputMode::Normal,
             search_input: TextArea::default(),
             create_modal: CreateModal::new(),
+            editing_bead_id: None,
             reason_input: TextArea::default(),
             show_labels: true,
             show_help: false,
@@ -176,9 +180,27 @@ impl App {
                         self.create_bead()?;
                         self.input_mode = InputMode::Normal;
                         self.create_modal.close();
+                        self.editing_bead_id = None;
                     }
                     ModalAction::Cancelled => {
                         self.input_mode = InputMode::Normal;
+                        self.editing_bead_id = None;
+                    }
+                    ModalAction::None => {}
+                }
+                return Ok(());
+            }
+            InputMode::Editing => {
+                match self.create_modal.handle_key(key) {
+                    ModalAction::Submit => {
+                        self.update_bead()?;
+                        self.input_mode = InputMode::Normal;
+                        self.create_modal.close();
+                        self.editing_bead_id = None;
+                    }
+                    ModalAction::Cancelled => {
+                        self.input_mode = InputMode::Normal;
+                        self.editing_bead_id = None;
                     }
                     ModalAction::None => {}
                 }
@@ -329,7 +351,18 @@ impl App {
             // Add new bead
             KeyCode::Char('a') => {
                 self.input_mode = InputMode::Creating;
+                self.editing_bead_id = None;
                 self.create_modal.open();
+            }
+
+            // Edit selected bead
+            KeyCode::Char('e') if self.focus == Focus::Detail => {
+                // Clone the bead to avoid borrow issues
+                if let Some(bead) = self.get_selected_bead().cloned() {
+                    self.input_mode = InputMode::Editing;
+                    self.editing_bead_id = Some(bead.id.clone());
+                    self.create_modal.open_with_bead(&bead);
+                }
             }
 
             // Theme
@@ -513,6 +546,82 @@ impl App {
 
         // Select the newly created bead (should be near the top after refresh)
         self.list_state.first();
+
+        Ok(())
+    }
+
+    /// Update an existing bead from the create modal
+    fn update_bead(&mut self) -> Result<()> {
+        // Get the bead ID we're editing
+        let id = match &self.editing_bead_id {
+            Some(id) => id.clone(),
+            None => return Ok(()), // Safety: shouldn't happen
+        };
+
+        // Find the original bead to compare
+        let original = self.beads.iter().find(|b| b.id == id);
+        if original.is_none() {
+            return Ok(()); // Bead not found, nothing to update
+        }
+        let original = original.unwrap();
+
+        // Get current values from modal
+        let new_title = self.create_modal.get_title();
+        let new_description = self.create_modal.get_description();
+        let new_type = self.create_modal.bead_type;
+        let new_priority = self.create_modal.priority;
+        let new_labels: std::collections::HashSet<String> =
+            self.create_modal.get_labels().into_iter().collect();
+        let old_labels: std::collections::HashSet<String> =
+            original.labels.iter().cloned().collect();
+
+        // Build update command with only changed fields
+        let mut updates_needed = false;
+
+        // Check title
+        if new_title != original.title {
+            BrCli::update_field(&id, "title", &new_title)?;
+            updates_needed = true;
+        }
+
+        // Check description
+        let old_desc = original.description.as_deref().unwrap_or("");
+        let new_desc_str = new_description.as_deref().unwrap_or("");
+        if new_desc_str != old_desc {
+            BrCli::update_field(&id, "description", new_desc_str)?;
+            updates_needed = true;
+        }
+
+        // Check type
+        if new_type != original.bead_type {
+            BrCli::update_field(&id, "type", &new_type.to_string())?;
+            updates_needed = true;
+        }
+
+        // Check priority
+        if new_priority != original.priority {
+            BrCli::update_field(&id, "priority", &new_priority.to_string())?;
+            updates_needed = true;
+        }
+
+        // Handle labels: add new ones, remove old ones
+        let labels_to_add: Vec<_> = new_labels.difference(&old_labels).collect();
+        let labels_to_remove: Vec<_> = old_labels.difference(&new_labels).collect();
+
+        for label in labels_to_add {
+            BrCli::add_label(&id, label)?;
+            updates_needed = true;
+        }
+
+        for label in labels_to_remove {
+            BrCli::remove_label(&id, label)?;
+            updates_needed = true;
+        }
+
+        // Refresh if we made any changes
+        if updates_needed {
+            self.refresh()?;
+        }
 
         Ok(())
     }
