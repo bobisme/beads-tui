@@ -69,15 +69,27 @@ impl TextInput {
                 true
             }
 
-            // Ctrl+A: Beginning of line
+            // Ctrl+A: Beginning of line (current line in multiline)
             KeyCode::Char('a') if ctrl => {
-                self.cursor = 0;
+                self.move_to_line_start();
                 true
             }
 
-            // Ctrl+E: End of line
+            // Ctrl+E: End of line (current line in multiline)
             KeyCode::Char('e') if ctrl => {
-                self.cursor = self.text.len();
+                self.move_to_line_end();
+                true
+            }
+
+            // Up arrow: Move to previous line (multiline support)
+            KeyCode::Up => {
+                self.move_up();
+                true
+            }
+
+            // Down arrow: Move to next line (multiline support)
+            KeyCode::Down => {
+                self.move_down();
                 true
             }
 
@@ -313,6 +325,100 @@ impl TextInput {
         }
 
         self.text.drain(self.cursor..start);
+    }
+
+    /// Move cursor to start of current line
+    fn move_to_line_start(&mut self) {
+        // Find previous newline or start of text
+        let text_before = &self.text[..self.cursor];
+        if let Some(pos) = text_before.rfind('\n') {
+            self.cursor = pos + 1; // After the newline
+        } else {
+            self.cursor = 0; // No newline found, go to start
+        }
+    }
+
+    /// Move cursor to end of current line
+    fn move_to_line_end(&mut self) {
+        // Find next newline or end of text
+        let text_after = &self.text[self.cursor..];
+        if let Some(pos) = text_after.find('\n') {
+            self.cursor += pos; // Before the newline
+        } else {
+            self.cursor = self.text.len(); // No newline found, go to end
+        }
+    }
+
+    /// Move cursor up one line (multiline navigation)
+    fn move_up(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        // Find start of current line and column position
+        let (line_start, col) = self.get_line_start_and_col();
+
+        if line_start == 0 {
+            return; // Already on first line
+        }
+
+        // Find start of previous line
+        let text_before_line = &self.text[..line_start.saturating_sub(1)]; // -1 to skip the \n
+        let prev_line_start = text_before_line.rfind('\n')
+            .map(|pos| pos + 1)
+            .unwrap_or(0);
+
+        // Find end of previous line
+        let prev_line_end = line_start.saturating_sub(1);
+        let prev_line_len = prev_line_end - prev_line_start;
+
+        // Move to same column or end of line if shorter
+        self.cursor = prev_line_start + col.min(prev_line_len);
+    }
+
+    /// Move cursor down one line (multiline navigation)
+    fn move_down(&mut self) {
+        let text_len = self.text.len();
+        if self.cursor >= text_len {
+            return;
+        }
+
+        // Find start of current line and column position
+        let (_line_start, col) = self.get_line_start_and_col();
+
+        // Find end of current line (next newline or end of text)
+        let text_after_cursor = &self.text[self.cursor..];
+        let line_end = if let Some(pos) = text_after_cursor.find('\n') {
+            self.cursor + pos
+        } else {
+            return; // Already on last line
+        };
+
+        // Find start of next line
+        let next_line_start = line_end + 1;
+        if next_line_start >= text_len {
+            return; // No next line
+        }
+
+        // Find end of next line
+        let text_from_next = &self.text[next_line_start..];
+        let next_line_end = text_from_next.find('\n')
+            .map(|pos| next_line_start + pos)
+            .unwrap_or(text_len);
+        let next_line_len = next_line_end - next_line_start;
+
+        // Move to same column or end of line if shorter
+        self.cursor = next_line_start + col.min(next_line_len);
+    }
+
+    /// Get the start position and column offset of the current line
+    fn get_line_start_and_col(&self) -> (usize, usize) {
+        let text_before = &self.text[..self.cursor];
+        let line_start = text_before.rfind('\n')
+            .map(|pos| pos + 1)
+            .unwrap_or(0);
+        let col = self.cursor - line_start;
+        (line_start, col)
     }
 
     fn prev_char_boundary(&self, pos: usize) -> usize {
