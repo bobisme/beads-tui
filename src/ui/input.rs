@@ -355,8 +355,8 @@ impl TextInput {
             return;
         }
 
-        // Find start of current line and column position
-        let (line_start, col) = self.get_line_start_and_col();
+        // Find start of current line and column position (in chars)
+        let (line_start, col_chars) = self.get_line_start_and_col_chars();
 
         if line_start == 0 {
             return; // Already on first line
@@ -368,12 +368,14 @@ impl TextInput {
             .map(|pos| pos + 1)
             .unwrap_or(0);
 
-        // Find end of previous line
+        // Find end of previous line (before the \n)
         let prev_line_end = line_start.saturating_sub(1);
-        let prev_line_len = prev_line_end - prev_line_start;
+        let prev_line = &self.text[prev_line_start..prev_line_end];
+        let prev_line_chars = prev_line.chars().count();
 
-        // Move to same column or end of line if shorter
-        self.cursor = prev_line_start + col.min(prev_line_len);
+        // Move to same column (in chars) or end of line if shorter
+        let target_col = col_chars.min(prev_line_chars);
+        self.cursor = self.byte_offset_for_char_col(prev_line_start, target_col);
     }
 
     /// Move cursor down one line (multiline navigation)
@@ -383,13 +385,13 @@ impl TextInput {
             return;
         }
 
-        // Find start of current line and column position
-        let (_line_start, col) = self.get_line_start_and_col();
+        // Find start of current line and column position (in chars)
+        let (line_start, col_chars) = self.get_line_start_and_col_chars();
 
         // Find end of current line (next newline or end of text)
-        let text_after_cursor = &self.text[self.cursor..];
-        let line_end = if let Some(pos) = text_after_cursor.find('\n') {
-            self.cursor + pos
+        let text_from_line_start = &self.text[line_start..];
+        let line_end = if let Some(pos) = text_from_line_start.find('\n') {
+            line_start + pos
         } else {
             return; // Already on last line
         };
@@ -405,20 +407,46 @@ impl TextInput {
         let next_line_end = text_from_next.find('\n')
             .map(|pos| next_line_start + pos)
             .unwrap_or(text_len);
-        let next_line_len = next_line_end - next_line_start;
+        let next_line = &self.text[next_line_start..next_line_end];
+        let next_line_chars = next_line.chars().count();
 
-        // Move to same column or end of line if shorter
-        self.cursor = next_line_start + col.min(next_line_len);
+        // Move to same column (in chars) or end of line if shorter
+        let target_col = col_chars.min(next_line_chars);
+        self.cursor = self.byte_offset_for_char_col(next_line_start, target_col);
     }
 
-    /// Get the start position and column offset of the current line
-    fn get_line_start_and_col(&self) -> (usize, usize) {
+    /// Get the start position (in bytes) and column (in chars) of the current line
+    fn get_line_start_and_col_chars(&self) -> (usize, usize) {
         let text_before = &self.text[..self.cursor];
         let line_start = text_before.rfind('\n')
             .map(|pos| pos + 1)
             .unwrap_or(0);
-        let col = self.cursor - line_start;
-        (line_start, col)
+
+        // Count characters from line start to cursor
+        let line_text = &self.text[line_start..self.cursor];
+        let col_chars = line_text.chars().count();
+
+        (line_start, col_chars)
+    }
+
+    /// Given a line start byte offset and a character column, return the byte offset for that position
+    fn byte_offset_for_char_col(&self, line_start: usize, char_col: usize) -> usize {
+        let text_from_start = &self.text[line_start..];
+
+        // Find the byte offset that corresponds to char_col characters
+        let mut byte_offset = 0;
+
+        for (chars_seen, ch) in text_from_start.chars().enumerate() {
+            if chars_seen >= char_col {
+                break;
+            }
+            if ch == '\n' {
+                break; // Don't go past newline
+            }
+            byte_offset += ch.len_utf8();
+        }
+
+        line_start + byte_offset
     }
 
     fn prev_char_boundary(&self, pos: usize) -> usize {
