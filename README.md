@@ -75,6 +75,22 @@ Text input supports terminal-style navigation:
 - [beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`) CLI for mutations
 - A `.beads/beads.db` SQLite database
 
+## Development
+
+### Demo Script
+
+Generate a temporary beads project with sample data for testing and screenshots:
+
+```bash
+./scripts/demo.sh
+```
+
+This creates a temporary directory with:
+- Various beads across different priorities (P0-P3)
+- Multiple bead types (bug, feature, task)
+- Labels, comments, and dependencies
+- One closed bead to show completed work
+
 ## License
 
 MIT
