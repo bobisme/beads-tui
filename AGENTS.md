@@ -207,6 +207,39 @@ When in doubt:
 
 **Update `Cargo.toml` version in the same commit** where you make the changes.
 
+### Merge and Release
+
+After changes are ready (tests pass, clippy clean, formatted):
+
+```bash
+# Pre-flight checks
+cargo fmt
+cargo clippy -- -D warnings
+cargo test
+
+# Bump version in Cargo.toml
+# e.g., 0.3.1 to 0.4.0
+
+# Commit
+git add -A
+git commit -m "feat(scope): description
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Tag the release and push
+git tag vX.Y.Z
+git push && git push origin vX.Y.Z
+
+# Install locally
+just install
+
+# Verify
+bu --version
+
+# Announce on botbus
+botbus --agent <your-agent> send beads-tui "Released vX.Y.Z - [summary of changes]"
+```
+
 ---
 
 ## Code Style

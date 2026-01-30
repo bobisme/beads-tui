@@ -29,6 +29,7 @@ impl TextInput {
         Self::default()
     }
 
+    #[allow(dead_code)]
     pub fn with_text(text: impl Into<String>) -> Self {
         let text = text.into();
         let cursor = text.len();

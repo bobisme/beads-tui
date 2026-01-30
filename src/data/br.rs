@@ -146,15 +146,16 @@ impl BrCli {
     /// Add a comment to a bead
     pub fn add_comment(id: &str, comment: &str) -> Result<()> {
         let output = Command::new("br")
-            .arg("comment")
+            .arg("comments")
+            .arg("add")
             .arg(id)
             .arg(comment)
             .output()
-            .context("Failed to execute br comment command")?;
+            .context("Failed to execute br comments add command")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("br comment failed: {}", stderr);
+            anyhow::bail!("br comments add failed: {}", stderr);
         }
 
         Ok(())

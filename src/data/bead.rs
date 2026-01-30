@@ -185,6 +185,17 @@ impl std::str::FromStr for DependencyType {
     }
 }
 
+/// A comment on a bead
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Comment {
+    /// Comment author
+    pub author: String,
+    /// Comment text
+    pub text: String,
+    /// When the comment was created
+    pub created_at: Option<DateTime<Utc>>,
+}
+
 /// A dependency relationship
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dependency {
@@ -231,6 +242,8 @@ pub struct Bead {
     pub blocked_by: Vec<String>,
     /// Beads that this one blocks
     pub blocks: Vec<String>,
+    /// Comments on this bead
+    pub comments: Vec<Comment>,
 }
 
 impl Bead {
@@ -264,6 +277,7 @@ impl Default for Bead {
             parent_ids: Vec::new(),
             blocked_by: Vec::new(),
             blocks: Vec::new(),
+            comments: Vec::new(),
         }
     }
 }

@@ -147,6 +147,7 @@ pub fn render_layout(
     (list_area, detail_area)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_footer(
     frame: &mut ratatui::Frame,
     area: Rect,

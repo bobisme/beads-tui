@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
-use crate::data::{Bead, BeadStatus};
+use crate::data::{Bead, BeadStatus, Comment};
 use crate::ui::Theme;
 
 /// State for the detail panel (scroll position)
@@ -46,6 +46,7 @@ impl DetailState {
     }
 
     /// Get current scroll position
+    #[allow(dead_code)]
     pub fn scroll(&self) -> u16 {
         self.scroll
     }
@@ -80,6 +81,31 @@ impl<'a> DetailPanel<'a> {
             BeadStatus::Closed => self.theme.status_closed,
         };
         Style::default().fg(color)
+    }
+
+    fn render_comment(&self, lines: &mut Vec<Line<'static>>, comment: &Comment) {
+        let mut header = vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                comment.author.clone(),
+                Style::default()
+                    .fg(self.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ];
+        if let Some(ts) = comment.created_at {
+            header.push(Span::styled(
+                format!("  {}", ts.format("%Y-%m-%d %H:%M")),
+                Style::default().fg(self.theme.muted),
+            ));
+        }
+        lines.push(Line::from(header));
+        for text_line in comment.text.lines() {
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(text_line.to_string(), Style::default().fg(self.theme.fg)),
+            ]));
+        }
     }
 
     fn render_metadata(&self, bead: &Bead) -> Text<'static> {
@@ -156,6 +182,21 @@ impl<'a> DetailPanel<'a> {
             lines.push(Line::raw(""));
             for line in desc.lines() {
                 lines.push(Line::raw(line.to_string()));
+            }
+        }
+
+        // Comments section
+        if !bead.comments.is_empty() {
+            lines.push(Line::raw(""));
+            lines.push(Line::from(vec![Span::styled(
+                format!("Comments ({}):", bead.comments.len()),
+                Style::default()
+                    .fg(self.theme.fg)
+                    .add_modifier(Modifier::BOLD),
+            )]));
+            for comment in &bead.comments {
+                lines.push(Line::raw(""));
+                self.render_comment(&mut lines, comment);
             }
         }
 

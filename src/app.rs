@@ -98,7 +98,7 @@ impl App {
             reason_input: TextInput::new(),
             show_labels: true,
             show_help: false,
-            hide_closed: true, // Start with closed beads hidden
+            hide_closed: true,  // Start with closed beads hidden
             show_detail: false, // Start with only list visible
             should_quit: false,
             refresh_interval: Duration::from_secs(refresh_secs),
@@ -279,7 +279,7 @@ impl App {
                     // Scroll to a very large number - ratatui will clamp it
                     self.detail_state.scroll_down(10000);
                 }
-            }
+            },
 
             // Open detail pane
             KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right if self.focus == Focus::List => {
@@ -627,15 +627,13 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         // Handle events
         if let Some(event) = event::poll_event(tick_rate)? {
             match event {
-                Event::Key(key) => {
-                    match app.handle_key(key) {
-                        Ok(()) => {}
-                        Err(e) if e.to_string() == "__SUSPEND__" => {
-                            suspend(terminal)?;
-                        }
-                        Err(e) => return Err(e),
+                Event::Key(key) => match app.handle_key(key) {
+                    Ok(()) => {}
+                    Err(e) if e.to_string() == "__SUSPEND__" => {
+                        suspend(terminal)?;
                     }
-                }
+                    Err(e) => return Err(e),
+                },
                 Event::Mouse(mouse) => {
                     app.handle_mouse(mouse)?;
                 }

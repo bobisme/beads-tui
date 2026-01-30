@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
 
-use super::{Bead, BeadStatus, BeadType, DependencyType};
+use super::{Bead, BeadStatus, BeadType, Comment, DependencyType};
 
 /// A store that reads beads from SQLite
 pub struct BeadStore {
@@ -30,12 +30,22 @@ impl BeadStore {
         let mut beads = self.load_beads()?;
         let deps = self.load_dependencies()?;
         let labels = self.load_labels()?;
+        let comments = self.load_comments()?;
 
         // Apply labels to beads
         for bead in &mut beads {
             for (issue_id, label) in &labels {
                 if issue_id == &bead.id {
                     bead.labels.push(label.clone());
+                }
+            }
+        }
+
+        // Apply comments to beads
+        for bead in &mut beads {
+            for (issue_id, comment) in &comments {
+                if issue_id == &bead.id {
+                    bead.comments.push(comment.clone());
                 }
             }
         }
@@ -138,6 +148,7 @@ impl BeadStore {
                     parent_ids: Vec::new(),
                     blocked_by: Vec::new(),
                     blocks: Vec::new(),
+                    comments: Vec::new(),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -184,6 +195,41 @@ impl BeadStore {
             .collect();
 
         Ok(labels)
+    }
+
+    fn load_comments(&self) -> Result<Vec<(String, Comment)>> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT issue_id, author, text, created_at
+            FROM comments
+            ORDER BY created_at ASC
+            "#,
+        )?;
+
+        let comments = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    Comment {
+                        author: row.get(1)?,
+                        text: row.get(2)?,
+                        created_at: row.get::<_, Option<String>>(3)?.and_then(|s| {
+                            chrono::DateTime::parse_from_rfc3339(&s)
+                                .ok()
+                                .map(|dt| dt.with_timezone(&chrono::Utc))
+                                .or_else(|| {
+                                    chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+                                        .ok()
+                                        .map(|ndt| ndt.and_utc())
+                                })
+                        }),
+                    },
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(comments)
     }
 
     /// Get a single bead by ID
