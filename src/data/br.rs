@@ -21,15 +21,14 @@ impl BrCli {
     ) -> Result<String> {
         let mut cmd = Command::new("br");
         cmd.arg("create")
-            .arg("--title")
-            .arg(title)
+            .arg(format!("--title={}", title))
             .arg("--type")
             .arg(bead_type.to_string())
             .arg("--priority")
             .arg(priority.to_string());
 
         if let Some(desc) = description {
-            cmd.arg("--description").arg(desc);
+            cmd.arg(format!("--description={}", desc));
         }
 
         let output = cmd
@@ -92,7 +91,7 @@ impl BrCli {
         cmd.arg("close").arg(id);
 
         if let Some(r) = reason {
-            cmd.arg("--reason").arg(r);
+            cmd.arg(format!("--reason={}", r));
         }
 
         let output = cmd.output().context("Failed to execute br close command")?;
@@ -130,8 +129,7 @@ impl BrCli {
         let output = Command::new("br")
             .arg("update")
             .arg(id)
-            .arg("--add-label")
-            .arg(label)
+            .arg(format!("--add-label={}", label))
             .output()
             .context("Failed to execute br update --add-label command")?;
 
@@ -149,6 +147,7 @@ impl BrCli {
             .arg("comments")
             .arg("add")
             .arg(id)
+            .arg("--")
             .arg(comment)
             .output()
             .context("Failed to execute br comments add command")?;
