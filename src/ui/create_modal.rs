@@ -362,7 +362,8 @@ fn render_description_field(frame: &mut Frame, area: Rect, theme: &Theme, modal:
         let (before, after) = text.split_at(cursor.min(text.len()));
         let mut content = before.to_string();
         content.push('\u{2588}'); // Block cursor
-        content.push_str(after);
+        // Skip first character of after (covered by cursor)
+        content.push_str(&after.chars().skip(1).collect::<String>());
 
         let para = Paragraph::new(content)
             .style(Style::default().fg(theme.fg))
@@ -449,10 +450,14 @@ fn render_options_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Cr
             "\u{2588}".to_string(),
             Style::default().fg(theme.accent),
         ));
-        spans.push(Span::styled(
-            after.to_string(),
-            Style::default().fg(theme.fg),
-        ));
+        // Skip first character of after (covered by cursor)
+        let rest = after.chars().skip(1).collect::<String>();
+        if !rest.is_empty() {
+            spans.push(Span::styled(
+                rest,
+                Style::default().fg(theme.fg),
+            ));
+        }
     } else {
         let labels_text = if modal.labels.is_empty() {
             "(none)".to_string()
@@ -469,9 +474,15 @@ fn render_options_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Cr
 
 fn render_input_with_cursor<'a>(text: &str, cursor: usize, theme: &Theme) -> Line<'a> {
     let (before, after) = text.split_at(cursor.min(text.len()));
-    Line::from(vec![
-        Span::styled(before.to_string(), Style::default().fg(theme.fg)),
-        Span::styled("\u{2588}".to_string(), Style::default().fg(theme.accent)),
-        Span::styled(after.to_string(), Style::default().fg(theme.fg)),
-    ])
+    let mut spans = vec![Span::styled(before.to_string(), Style::default().fg(theme.fg))];
+
+    // Cursor replaces the character at cursor position
+    spans.push(Span::styled("\u{2588}".to_string(), Style::default().fg(theme.accent)));
+
+    // Skip first character of after (covered by cursor)
+    if let Some(rest) = after.chars().skip(1).collect::<String>().into() {
+        spans.push(Span::styled(rest, Style::default().fg(theme.fg)));
+    }
+
+    Line::from(spans)
 }
