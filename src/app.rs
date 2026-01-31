@@ -35,6 +35,7 @@ pub enum InputMode {
     Editing,
     ClosingBead,
     ReopeningBead,
+    AddingComment,
 }
 
 /// Application state
@@ -63,6 +64,8 @@ pub struct App {
     editing_bead_id: Option<String>,
     /// Reason input for closing/reopening beads
     reason_input: TextArea<'static>,
+    /// Comment input for adding comments
+    comment_input: TextArea<'static>,
     /// Show labels in list view
     show_labels: bool,
     /// Show help overlay
@@ -101,6 +104,7 @@ impl App {
             create_modal: CreateModal::new(),
             editing_bead_id: None,
             reason_input: TextArea::default(),
+            comment_input: TextArea::default(),
             show_labels: true,
             show_help: false,
             hide_closed: true,  // Start with closed beads hidden
@@ -236,6 +240,23 @@ impl App {
                     }
                     _ => {
                         self.reason_input.input(key);
+                    }
+                }
+                return Ok(());
+            }
+            InputMode::AddingComment => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.input_mode = InputMode::Normal;
+                        self.comment_input = TextArea::default();
+                    }
+                    KeyCode::Enter => {
+                        self.add_comment()?;
+                        self.input_mode = InputMode::Normal;
+                        self.comment_input = TextArea::default();
+                    }
+                    _ => {
+                        self.comment_input.input(key);
                     }
                 }
                 return Ok(());
@@ -400,8 +421,10 @@ impl App {
                 }
             }
 
-            // Toggle closed visibility
-            KeyCode::Char('c') => {
+            // 'c' key - context dependent:
+            // - List focused: toggle closed visibility
+            // - Detail focused: add comment
+            KeyCode::Char('c') if self.focus == Focus::List => {
                 self.hide_closed = !self.hide_closed;
                 // Clamp selection to new filtered length
                 let len = self.filtered_len();
@@ -409,6 +432,13 @@ impl App {
                     if idx >= len && len > 0 {
                         self.list_state.select(Some(len - 1));
                     }
+                }
+            }
+            KeyCode::Char('c') if self.focus == Focus::Detail => {
+                // Only allow comments if we have a selected bead
+                if self.get_selected_bead().is_some() {
+                    self.input_mode = InputMode::AddingComment;
+                    self.comment_input = TextArea::default();
                 }
             }
 
@@ -515,6 +545,23 @@ impl App {
                 // Add the reason as a comment
                 let _ = BrCli::add_comment(&id, &format!("Reopened: {}", r));
             }
+            self.refresh()?;
+        }
+        Ok(())
+    }
+
+    /// Add a comment to the selected bead
+    fn add_comment(&mut self) -> Result<()> {
+        if let Some(bead) = self.get_selected_bead() {
+            let id = bead.id.clone();
+            let comment_text = self.comment_input.lines().join("\n");
+
+            // Don't add empty comments
+            if comment_text.trim().is_empty() {
+                return Ok(());
+            }
+
+            BrCli::add_comment(&id, &comment_text)?;
             self.refresh()?;
         }
         Ok(())
@@ -707,6 +754,8 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         let search_cursor = app.search_input.cursor().1; // Column position only
         let reason_text = app.reason_input.lines().join("\n").to_string();
         let reason_cursor = app.reason_input.cursor().1; // Column position only
+        let comment_text = app.comment_input.lines().join("\n").to_string();
+        let comment_cursor = app.comment_input.cursor().1; // Column position only
 
         // Draw
         terminal.draw(|frame| {
@@ -729,6 +778,8 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
                 &app.create_modal,
                 &reason_text,
                 reason_cursor,
+                &comment_text,
+                comment_cursor,
             );
             // Store areas for mouse handling
             app.list_area = list_area;

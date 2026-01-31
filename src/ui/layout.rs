@@ -48,6 +48,8 @@ pub fn render_layout(
     create_modal: &CreateModal,
     reason_text: &str,
     reason_cursor: usize,
+    comment_text: &str,
+    comment_cursor: usize,
 ) -> (Rect, Rect) {
     let area = frame.area();
     let is_narrow = area.width < MIN_DUAL_PANE_WIDTH;
@@ -142,6 +144,15 @@ pub fn render_layout(
             reason_text,
             reason_cursor,
         );
+    } else if input_mode == InputMode::AddingComment {
+        render_reason_modal(
+            frame,
+            area,
+            theme,
+            "Add Comment - Enter to Submit",
+            comment_text,
+            comment_cursor,
+        );
     }
 
     (list_area, detail_area)
@@ -172,9 +183,11 @@ fn render_footer(
         InputMode::ClosingBead | InputMode::ReopeningBead => {
             vec![("Esc", "cancel"), ("Enter", "confirm")]
         }
+        InputMode::AddingComment => vec![("Esc", "cancel"), ("Enter", "add")],
         InputMode::Normal if show_detail && focus == Focus::Detail => vec![
             ("j/k", "scroll"),
             ("Esc/h", "close"),
+            ("c", "comment"),
             ("e", "edit"),
             ("x", "close/reopen"),
             ("L", "labels"),
