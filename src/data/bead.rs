@@ -351,8 +351,14 @@ pub fn build_tree_order<'a>(
     // DFS to build ordered list with depths
     let mut result: Vec<(&Bead, usize)> = Vec::new();
     let mut stack: Vec<(&Bead, usize)> = roots.into_iter().map(|b| (b, 0)).rev().collect();
+    let mut visited: HashSet<&str> = HashSet::new();
 
     while let Some((bead, depth)) = stack.pop() {
+        // Skip if already visited (can happen with multiple dependency types)
+        if visited.contains(bead.id.as_str()) {
+            continue;
+        }
+        visited.insert(bead.id.as_str());
         result.push((bead, depth));
 
         // Add children in reverse order (so they come out in correct order)
