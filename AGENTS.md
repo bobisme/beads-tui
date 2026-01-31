@@ -220,18 +220,24 @@ cargo test
 # Bump version in Cargo.toml
 # e.g., 0.3.1 to 0.4.0
 
-# Commit
-git add -A
-git commit -m "feat(scope): description
+# Commit with jj
+jj describe -m "feat(scope): description
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
-# Tag the release and push
-git tag vX.Y.Z
-git push && git push origin vX.Y.Z
+# Move main bookmark to current commit
+jj bookmark set main -r @
+
+# IMPORTANT: Tag with explicit commit hash, not git HEAD
+# Get the commit hash from jj log
+COMMIT_HASH=$(git log -1 --format=%h)
+git tag vX.Y.Z $COMMIT_HASH -m "feat(scope): description"
+
+# Push bookmark and tags
+jj git push && git push --tags
 
 # Install locally
-just install
+cargo install --path .
 
 # Verify
 bu --version
@@ -239,6 +245,14 @@ bu --version
 # Announce on botbus
 botbus --agent <your-agent> send beads-tui "Released vX.Y.Z - [summary of changes]"
 ```
+
+**Common Mistake to Avoid:**
+
+❌ **WRONG**: `git tag vX.Y.Z` (tags whatever git HEAD points to, which may be stale)
+
+✅ **CORRECT**: `git tag vX.Y.Z $COMMIT_HASH` (tags the specific commit you just created)
+
+When using jj, `jj bookmark set main` updates jj's internal state but doesn't immediately move git's HEAD. Always use the explicit commit hash when tagging to ensure you tag the correct commit.
 
 ---
 
