@@ -80,12 +80,13 @@ If stuck:
 After completing the implementation:
 
 - Describe the change: `maw ws jj $WS describe -m "<bead-id>: <summary>"`
-- Create a crit review with bead context: `crit reviews create --agent $AGENT --title "<bead-title>" --description "For <bead-id>: <summary of changes, what was done, why>"`
+- Create a crit review with bead context: `crit reviews create --agent $AGENT --path $WS_PATH --title "<bead-title>" --description "For <bead-id>: <summary of changes, what was done, why>"`
+  - **`--path $WS_PATH` is required** — crit must know which workspace contains the changes
   - Always include the bead ID in the description so reviewers have context
   - Explain what changed and why, not just a summary
 - Add a comment to the bead: `br comments add --actor $AGENT --author $AGENT <bead-id> "Review requested: <review-id>, workspace: $WS ($WS_PATH)"`
 - **If requesting a specialist reviewer** (e.g., security):
-  - Assign them: `crit reviews request <review-id> --reviewers <reviewer> --agent $AGENT`
+  - Assign them: `crit reviews request <review-id> --reviewers <reviewer> --agent $AGENT --path $WS_PATH`
   - Announce with @mention: `bus send --agent $AGENT $BOTBOX_PROJECT "Review requested: <review-id> for <bead-id>, @<reviewer>" -L review-request`
   - The @mention triggers auto-spawn hooks
 - **If requesting a general code review**:
@@ -99,7 +100,7 @@ See [review-request](review-request.md) for full details.
 
 If a review was conducted:
 - Verify approval: `crit review <review-id>` — confirm LGTM, no blocks
-- Mark review as merged: `crit reviews merge <review-id> --agent $AGENT`
+- Mark review as merged: `crit reviews mark-merged <review-id> --agent $AGENT`
 
 Then proceed with teardown:
 - `br comments add --actor $AGENT --author $AGENT <bead-id> "Completed by $AGENT"`

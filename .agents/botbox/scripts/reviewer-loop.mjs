@@ -161,18 +161,34 @@ async function runCommand(cmd, args = []) {
 }
 
 // --- Helper: check if there are reviews needing attention ---
-async function hasWork() {
+// Returns { hasWork: boolean, inbox: object }
+async function findWork() {
 	try {
-		// crit inbox shows only reviews awaiting this reviewer's response:
+		// crit inbox --all-workspaces searches both repo root and all jj workspaces
+		// Shows only reviews awaiting this reviewer's response:
 		// - Reviews where reviewer is assigned but hasn't voted
 		// - Reviews that were re-requested after voting
 		// Reviews disappear from inbox after voting until re-requested.
-		const result = await runCommand('crit', ['inbox', '--agent', AGENT, '--format', 'json']);
-		const inbox = JSON.parse(result.stdout || '[]');
-		return Array.isArray(inbox) && inbox.length > 0;
+		const result = await runCommand('crit', [
+			'inbox',
+			'--agent',
+			AGENT,
+			'--all-workspaces',
+			'--format',
+			'json',
+		]);
+		const inbox = JSON.parse(result.stdout || '{}');
+		const hasReviews =
+			(inbox.reviews_awaiting_vote && inbox.reviews_awaiting_vote.length > 0) ||
+			(inbox.threads_with_new_responses && inbox.threads_with_new_responses.length > 0);
+
+		return {
+			hasWork: hasReviews,
+			inbox,
+		};
 	} catch (err) {
-		console.error('Error checking inbox:', err.message);
-		return false;
+		console.error('Error finding work:', err.message);
+		return { hasWork: false, inbox: {} };
 	}
 }
 
@@ -185,20 +201,25 @@ function buildPrompt() {
 	// Use project-local prompts
 	const promptsDir = join(process.cwd(), '.agents', 'botbox', 'prompts');
 
+	let basePrompt;
 	try {
-		return loadPrompt(promptName, { AGENT, PROJECT }, promptsDir);
+		basePrompt = loadPrompt(promptName, { AGENT, PROJECT }, promptsDir);
 	} catch (err) {
 		// Fall back to base reviewer if specialized prompt not found
 		if (role && promptName !== 'reviewer') {
 			console.warn(`Warning: ${promptName}.md not found, using base reviewer prompt`);
 			try {
-				return loadPrompt('reviewer', { AGENT, PROJECT }, promptsDir);
+				basePrompt = loadPrompt('reviewer', { AGENT, PROJECT }, promptsDir);
 			} catch {
 				// If even base fails, throw original error
+				throw err;
 			}
+		} else {
+			throw err;
 		}
-		throw err;
 	}
+
+	return basePrompt;
 }
 
 // --- Run agent via botbox run-agent ---
@@ -292,9 +313,9 @@ async function main() {
 				'-m',
 				`reviewer-loop for ${PROJECT}`,
 			]);
-		} catch (err) {
-			console.log(`Claim denied. Agent ${AGENT} is already running.`);
-			process.exit(0);
+		} catch {
+			// Claim held by another agent - they're orchestrating, continue
+			console.log(`Claim held by another agent, continuing`);
 		}
 	}
 
@@ -316,7 +337,8 @@ async function main() {
 	for (let i = 1; i <= MAX_LOOPS; i++) {
 		console.log(`\n--- Review loop ${i}/${MAX_LOOPS} ---`);
 
-		if (!(await hasWork())) {
+		const work = await findWork();
+		if (!work.hasWork) {
 			await runCommand('bus', ['statuses', 'set', '--agent', AGENT, 'Idle']);
 			console.log('No reviews pending. Exiting cleanly.');
 			await runCommand('bus', [
@@ -330,6 +352,11 @@ async function main() {
 			]);
 			break;
 		}
+
+		// Log what's pending
+		const reviewCount = work.inbox.reviews_awaiting_vote?.length || 0;
+		const threadCount = work.inbox.threads_with_new_responses?.length || 0;
+		console.log(`  ${reviewCount} reviews awaiting vote, ${threadCount} threads with responses`);
 
 		// Run Claude
 		try {

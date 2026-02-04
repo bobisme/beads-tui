@@ -1,0 +1,6 @@
+- Review cr-3nfe LGTM by beads-tui-security for bd-10b
+- Merged workspace keen-pine to main (feat: filter matches bead IDs)
+- Pushed to origin/main
+- Closed bd-10b: filter (/) now matches bead IDs in addition to titles
+- Closed bd-3jg per Bob's request (misfiled - for beads_rust not beads-tui)
+- All claims released, no remaining open issues
