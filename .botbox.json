@@ -1,10 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.4",
   "project": {
     "name": "beads-tui",
     "type": [
       "tui"
-    ]
+    ],
+    "default_agent": "beads-tui-dev",
+    "channel": "beads-tui"
   },
   "tools": {
     "beads": true,
