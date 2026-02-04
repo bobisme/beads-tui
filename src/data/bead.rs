@@ -298,9 +298,13 @@ pub fn build_tree_order<'a>(
             if hide_closed && b.status == BeadStatus::Closed {
                 return false;
             }
-            // Apply text filter
+            // Apply text filter (matches title or ID)
             filter
-                .map(|f| b.title.to_lowercase().contains(&f.to_lowercase()))
+                .map(|f| {
+                    let f_lower = f.to_lowercase();
+                    b.title.to_lowercase().contains(&f_lower)
+                        || b.id.to_lowercase().contains(&f_lower)
+                })
                 .unwrap_or(true)
         })
         .collect();
