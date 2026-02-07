@@ -11,17 +11,17 @@ use crossterm::{
         MouseButton, MouseEvent, MouseEventKind,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
-use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend, layout::Rect};
 
-use crate::data::{build_tree_order, Bead, BeadStatus, BeadStore, BrCli};
+use crate::data::{Bead, BeadStatus, BeadStore, BrCli, build_tree_order};
 use crate::event;
 use crate::ui::layout::Focus;
 use crate::ui::{
-    render_layout, BeadListState, CreateModal, DetailState, ModalAction, Theme, THEMES,
+    BeadListState, CreateModal, DetailState, ModalAction, THEMES, Theme, render_layout,
 };
 use tui_textarea::TextArea;
 
@@ -133,11 +133,7 @@ impl App {
     /// Get the current filter text (if searching or has active filter)
     fn filter(&self) -> Option<String> {
         let text = self.search_input.lines().join("\n");
-        if text.is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+        if text.is_empty() { None } else { Some(text) }
     }
 
     /// Get filtered beads count (uses tree order for consistency)
@@ -428,10 +424,11 @@ impl App {
                 self.hide_closed = !self.hide_closed;
                 // Clamp selection to new filtered length
                 let len = self.filtered_len();
-                if let Some(idx) = self.list_state.selected() {
-                    if idx >= len && len > 0 {
-                        self.list_state.select(Some(len - 1));
-                    }
+                if let Some(idx) = self.list_state.selected()
+                    && idx >= len
+                    && len > 0
+                {
+                    self.list_state.select(Some(len - 1));
                 }
             }
             KeyCode::Char('c') if self.focus == Focus::Detail => {

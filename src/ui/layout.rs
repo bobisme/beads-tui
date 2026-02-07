@@ -9,11 +9,11 @@ use ratatui::{
 };
 
 use crate::app::InputMode;
-use crate::data::{build_tree_order, Bead};
-use crate::ui::create_modal::{render_create_modal, CreateModal};
+use crate::data::{Bead, build_tree_order};
+use crate::ui::Theme;
+use crate::ui::create_modal::{CreateModal, render_create_modal};
 use crate::ui::detail::{DetailPanel, DetailState};
 use crate::ui::list::{BeadList, BeadListState};
-use crate::ui::Theme;
 
 /// Which pane is currently focused
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

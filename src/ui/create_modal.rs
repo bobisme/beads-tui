@@ -14,12 +14,12 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
-    Frame,
 };
 use tui_textarea::TextArea;
 
@@ -159,11 +159,7 @@ impl CreateModal {
     pub fn get_description(&self) -> Option<String> {
         let desc = self.description.lines().join("\n");
         let trimmed = desc.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(desc)
-        }
+        if trimmed.is_empty() { None } else { Some(desc) }
     }
 
     /// Get labels as a vector
@@ -357,7 +353,7 @@ fn render_title_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Crea
             .border_set(border::ROUNDED)
             .border_style(Style::default().fg(border_color))
             .title(" Title ")
-            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
+            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),
     );
     textarea.set_style(Style::default().fg(theme.fg));
     textarea.set_cursor_line_style(Style::default()); // Disable underline
@@ -389,7 +385,7 @@ fn render_description_field(frame: &mut Frame, area: Rect, theme: &Theme, modal:
             .border_set(border::ROUNDED)
             .border_style(Style::default().fg(border_color))
             .title(title)
-            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))
+            .title_style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),
     );
     textarea.set_style(Style::default().fg(theme.fg));
     textarea.set_cursor_line_style(Style::default()); // Disable underline
@@ -477,4 +473,3 @@ fn render_options_field(frame: &mut Frame, area: Rect, theme: &Theme, modal: &Cr
     let para = Paragraph::new(line);
     frame.render_widget(para, inner);
 }
-

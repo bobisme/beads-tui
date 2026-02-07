@@ -256,6 +256,11 @@ impl Bead {
     pub fn priority_label(&self) -> String {
         format!("P{}", self.priority)
     }
+
+    /// Check if this bead has the "deferred" label
+    pub fn is_deferred(&self) -> bool {
+        self.labels.iter().any(|l| l == "deferred")
+    }
 }
 
 impl Default for Bead {
@@ -349,8 +354,13 @@ pub fn build_tree_order<'a>(
         .copied()
         .collect();
 
-    // Sort roots by priority, then title
-    roots.sort_by(|a, b| a.priority.cmp(&b.priority).then(a.title.cmp(&b.title)));
+    // Sort roots: non-deferred first (by priority, then title), deferred last (by priority, then title)
+    roots.sort_by(|a, b| {
+        a.is_deferred()
+            .cmp(&b.is_deferred())
+            .then(a.priority.cmp(&b.priority))
+            .then(a.title.cmp(&b.title))
+    });
 
     // DFS to build ordered list with depths
     let mut result: Vec<(&Bead, usize)> = Vec::new();

@@ -10,4 +10,4 @@ pub use create_modal::{CreateModal, ModalAction};
 pub use detail::DetailState;
 pub use layout::render_layout;
 pub use list::BeadListState;
-pub use theme::{Theme, THEMES};
+pub use theme::{THEMES, Theme};

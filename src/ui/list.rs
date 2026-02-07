@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget},
 };
 
-use crate::data::{build_tree_order, Bead, BeadStatus};
+use crate::data::{Bead, BeadStatus, build_tree_order};
 use crate::ui::Theme;
 
 /// State for the bead list
@@ -142,20 +142,39 @@ impl<'a> BeadList<'a> {
         let type_icon = bead.bead_type.icon_for_status(&bead.status);
         let icon_color = self.type_status_color(&bead.status);
         let priority_style = self.priority_style(bead.priority);
+        let is_deferred = bead.is_deferred();
 
         // Indentation: 2 spaces per depth level
         let indent = "  ".repeat(depth);
 
+        // Deferred beads get italic styling on all text spans
+        let italic = if is_deferred {
+            Modifier::ITALIC
+        } else {
+            Modifier::empty()
+        };
+
         let mut spans = vec![
             Span::raw(indent),
-            Span::styled(format!("{} ", type_icon), Style::default().fg(icon_color)),
+            Span::styled(
+                format!("{} ", type_icon),
+                Style::default().fg(icon_color).add_modifier(italic),
+            ),
             Span::styled(
                 format!("P{} ", bead.priority),
-                priority_style.add_modifier(Modifier::BOLD),
+                priority_style
+                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(italic),
             ),
-            Span::styled(bead.id.clone(), Style::default().fg(self.theme.muted)),
+            Span::styled(
+                bead.id.clone(),
+                Style::default().fg(self.theme.muted).add_modifier(italic),
+            ),
             Span::raw(": "),
-            Span::styled(bead.title.clone(), Style::default().fg(self.theme.fg)),
+            Span::styled(
+                bead.title.clone(),
+                Style::default().fg(self.theme.fg).add_modifier(italic),
+            ),
         ];
 
         if self.show_labels && !bead.labels.is_empty() {

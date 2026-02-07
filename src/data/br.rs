@@ -58,10 +58,10 @@ impl BrCli {
             .to_string();
 
         // If we have a parent, add the parent-child dependency
-        if let Some(pid) = parent_id {
-            if !id.is_empty() {
-                Self::add_dependency(&id, pid, "parent-child")?;
-            }
+        if let Some(pid) = parent_id
+            && !id.is_empty()
+        {
+            Self::add_dependency(&id, pid, "parent-child")?;
         }
 
         Ok(id)
