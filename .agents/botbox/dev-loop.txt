@@ -1,3 +1,0 @@
-
---- 2026-02-07T23:29:52.827Z | jj:qyqpulqsonxs ---
-Processed bob's feature request. Implemented bd-gga (deferred beads italic + sorted to bottom) in workspace swift-bear. Review cr-3flb created and beads-tui-security reviewer spawned. Waiting for review.
