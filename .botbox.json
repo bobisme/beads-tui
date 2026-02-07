@@ -2,9 +2,7 @@
   "version": "1.0.11",
   "project": {
     "name": "beads-tui",
-    "type": [
-      "tui"
-    ],
+    "type": ["tui"],
     "channel": "beads-tui",
     "defaultAgent": "beads-tui-dev"
   },
@@ -16,10 +14,8 @@
     "botty": true
   },
   "review": {
-    "enabled": true,
-    "reviewers": [
-      "security"
-    ]
+    "enabled": false,
+    "reviewers": []
   },
   "pushMain": false,
   "agents": {
