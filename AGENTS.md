@@ -336,14 +336,14 @@ cargo test test_name -- --nocapture
 
 | Operation | Command |
 |-----------|---------|
-| View ready work | `br ready` |
-| Show bead | `br show <id>` |
-| Create | `br create --actor $AGENT --owner $AGENT --title="..." --type=task --priority=2` |
-| Start work | `br update --actor $AGENT <id> --status=in_progress --owner=$AGENT` |
-| Add comment | `br comments add --actor $AGENT --author $AGENT <id> "message"` |
-| Close | `br close --actor $AGENT <id>` |
-| Add dependency | `br dep add --actor $AGENT <blocked> <blocker>` |
-| Sync | `br sync --flush-only` |
+| View ready work | `maw exec default -- br ready` |
+| Show bead | `maw exec default -- br show <id>` |
+| Create | `maw exec default -- br create --actor $AGENT --owner $AGENT --title="..." --type=task --priority=2` |
+| Start work | `maw exec default -- br update --actor $AGENT <id> --status=in_progress --owner=$AGENT` |
+| Add comment | `maw exec default -- br comments add --actor $AGENT --author $AGENT <id> "message"` |
+| Close | `maw exec default -- br close --actor $AGENT <id>` |
+| Add dependency | `maw exec default -- br dep add --actor $AGENT <blocked> <blocker>` |
+| Sync | `maw exec default -- br sync --flush-only` |
 
 **Required flags**: `--actor $AGENT` on mutations, `--author $AGENT` on comments.
 
@@ -355,14 +355,14 @@ cargo test test_name -- --nocapture
 | List workspaces | `maw ws list` |
 | Merge to main | `maw ws merge <name> --destroy` |
 | Destroy (no merge) | `maw ws destroy <name>` |
-| Run jj in workspace | `maw ws jj <name> <jj-args...>` |
+| Run jj in workspace | `maw exec <name> -- jj <jj-args...>` |
 
 **Avoiding divergent commits**: Each workspace owns ONE commit. Only modify your own.
 
 | Safe | Dangerous |
 |------|-----------|
 | `jj describe` (your working copy) | `jj describe main -m "..."` |
-| `maw ws jj <your-ws> describe -m "..."` | `jj describe <other-change-id>` |
+| `maw exec <your-ws> -- jj describe -m "..."` | `jj describe <other-change-id>` |
 
 If you see `(divergent)` in `jj log`:
 ```bash
@@ -395,7 +395,7 @@ bus claims release --agent $AGENT --all  # when done
 Use `@<project>-<role>` mentions to request reviews:
 
 ```bash
-crit reviews request <review-id> --reviewers $PROJECT-security --agent $AGENT
+maw exec $WS -- crit reviews request <review-id> --reviewers $PROJECT-security --agent $AGENT
 bus send --agent $AGENT $PROJECT "Review requested: <review-id> @$PROJECT-security" -L review-request
 ```
 
@@ -403,13 +403,17 @@ The @mention triggers the auto-spawn hook for the reviewer.
 
 ### Cross-Project Communication
 
-When you have questions, feedback, or issues with tools from other projects:
+**Don't suffer in silence.** If a tool confuses you or behaves unexpectedly, post to its project channel.
 
 1. Find the project: `bus history projects -n 50` (the #projects channel has project registry entries)
-2. Post to their channel: `bus send <project> "..." -L feedback`
-3. For bugs/features, create beads in their repo (see [report-issue.md](.agents/botbox/report-issue.md))
+2. Post question or feedback: `bus send --agent $AGENT <project> "..." -L feedback`
+3. For bugs, create beads in their repo first
+4. **Always create a local tracking bead** so you check back later:
+   ```bash
+   maw exec default -- br create --actor $AGENT --owner $AGENT --title="[tracking] <summary>" --labels tracking --type=task --priority=3
+   ```
 
-This includes: bugs, feature requests, confusion about APIs, UX problems, or just questions.
+See [cross-channel.md](.agents/botbox/cross-channel.md) for the full workflow.
 
 ### Session Search (optional)
 
@@ -422,6 +426,7 @@ Use `cass search "error or problem"` to find how similar issues were solved in p
 
 ### Workflow Docs
 
+- [Ask questions, report bugs, and track responses across projects](.agents/botbox/cross-channel.md)
 - [Close bead, merge workspace, release claims, sync](.agents/botbox/finish.md)
 - [groom](.agents/botbox/groom.md)
 - [Verify approval before merge](.agents/botbox/merge-check.md)

@@ -9,6 +9,7 @@
  *   !qq [question]     → Answer with haiku
  *   !bigq [question]   → Answer with opus
  *   !q(model) [q]      → Answer with explicit model
+ *   !oneshot [msg]      → Respond once, no follow-up loop
  *   No prefix          → Smart triage (chat vs question vs work)
  *
  * Backwards compatible with old q:/qq:/big q:/q(model): prefixes.
@@ -117,6 +118,7 @@ Routes messages based on ! prefixes:
   !qq [question]     Answer with haiku (quick/cheap)
   !bigq [question]   Answer with opus (deep analysis)
   !q(model) [q]      Answer with explicit model
+  !oneshot [msg]     Respond once, no follow-up loop
   No prefix          Smart triage (chat vs question vs work)
 
 Also accepts old-style prefixes: q:, qq:, big q:, q(model):
@@ -165,13 +167,18 @@ async function runCommand(cmd, args = []) {
   })
 }
 
+// --- Helper: run command in default workspace (for br, bv) ---
+function runInDefault(cmd, args = []) {
+  return runCommand("maw", ["exec", "default", "--", cmd, ...args])
+}
+
 // ---------------------------------------------------------------------------
 // Route message based on ! prefix
 // ---------------------------------------------------------------------------
 
 /**
  * @typedef {object} Route
- * @property {"dev"|"bead"|"question"|"triage"} type
+ * @property {"dev"|"bead"|"question"|"triage"|"oneshot"} type
  * @property {string} body
  * @property {string} [model]
  */
@@ -185,6 +192,11 @@ export function routeMessage(body) {
   let trimmed = body.trim()
 
   // --- ! prefix commands (new convention) ---
+
+  // !oneshot [message] — respond once, no follow-up loop
+  if (/^!oneshot\b/i.test(trimmed)) {
+    return { type: "oneshot", body: trimmed.slice(8).trim() }
+  }
 
   // !dev [message]
   if (/^!dev\b/i.test(trimmed)) {
@@ -364,8 +376,8 @@ async function waitForFollowUp(channel) {
     "wait",
     "--agent",
     AGENT,
-    "--mention",
-    "--channel",
+    "--mentions",
+    "--channels",
     channel,
     "--timeout",
     WAIT_TIMEOUT.toString(),
@@ -561,7 +573,7 @@ async function handleBead(route, channel, message) {
     .join(" ")
   if (keywords) {
     try {
-      let result = await runCommand("br", ["search", keywords])
+      let result = await runInDefault("br", ["search", keywords])
       // br search output: "Found N issue(s) matching '...'" followed by bead lines
       if (result.stdout && !result.stdout.includes("Found 0")) {
         // Extract matches — lines containing bd-XXXX
@@ -586,17 +598,18 @@ async function handleBead(route, channel, message) {
     }
   }
 
-  // Create the bead
-  let title =
-    route.body.length > 80 ? route.body.slice(0, 80).trim() : route.body
-  let description = route.body
+  // Create the bead — first line is title, rest is description
+  let lines = route.body.split("\n")
+  let title = lines[0].trim()
+  if (title.length > 80) title = title.slice(0, 80).trim()
+  let description = lines.length > 1 ? lines.slice(1).join("\n").trim() : title
   if (transcript.length > 0) {
     description +=
       "\n\n## Conversation context\n\n" + formatTranscriptForPrompt()
   }
 
   try {
-    let result = await runCommand("br", [
+    let result = await runInDefault("br", [
       "create",
       "--actor",
       AGENT,
@@ -643,45 +656,32 @@ async function handleDev(route, channel, message) {
     await handleBead({ type: "bead", body: route.body }, channel, message)
   }
 
-  // Spawn dev-loop via botty
-  let spawnArgs = [
-    "spawn",
-    "--env-inherit",
-    "BOTBUS_CHANNEL,BOTBUS_MESSAGE_ID,BOTBUS_AGENT,BOTBUS_HOOK_ID",
-    "--name",
-    AGENT,
-    "--cwd",
-    process.cwd(),
-    "--",
-    "bun",
-    ".agents/botbox/scripts/dev-loop.mjs",
-    PROJECT,
-    AGENT,
-  ]
+  // Exec into dev-loop directly — we're already inside a botty PTY session,
+  // so the dev-loop inherits it. Using botty spawn would kill our own session
+  // (same --name) and orphan the child process.
+  let scriptPath = ".agents/botbox/scripts/dev-loop.mjs"
+  let args = ["bun", scriptPath, PROJECT, AGENT]
+  console.log(`Exec into dev-loop: ${args.join(" ")}`)
 
-  console.log(`Spawning dev-loop: botty ${spawnArgs.join(" ")}`)
-  try {
-    await runCommand("botty", spawnArgs)
-    console.log("Dev-loop spawned successfully")
-    await runCommand("bus", [
-      "send",
-      "--agent",
-      AGENT,
-      channel,
-      `Dev agent spawned — working on it.`,
-      "-L",
-      "spawn-ack",
-    ])
-  } catch (err) {
-    console.error("Error spawning dev-loop:", err.message)
-    await runCommand("bus", [
-      "send",
-      "--agent",
-      AGENT,
-      channel,
-      `Failed to spawn dev-loop: ${err.message}`,
-    ]).catch(() => {})
-  }
+  await runCommand("bus", [
+    "send",
+    "--agent",
+    AGENT,
+    channel,
+    `Dev agent spawned — working on it.`,
+    "-L",
+    "spawn-ack",
+  ]).catch(() => {})
+
+  // Hand off to dev-loop with inherited stdio — this replaces our process
+  let proc = spawn("bun", [scriptPath, PROJECT, AGENT], {
+    stdio: "inherit",
+    env: process.env,
+  })
+  let code = await new Promise((resolve) => {
+    proc.on("close", (c) => resolve(c ?? 1))
+  })
+  process.exit(code)
 }
 
 /**
@@ -722,6 +722,26 @@ async function handleTriage(route, channel, message) {
   } catch (err) {
     console.error("Error in triage:", err.message)
   }
+}
+
+/**
+ * Handle !oneshot — respond once with no follow-up loop.
+ * Uses default model (sonnet). No transcript, no bus wait.
+ * @param {Route} route
+ * @param {string} channel
+ * @param {any} message
+ */
+async function handleOneshot(route, channel, message) {
+  let prompt = buildQuestionPrompt(channel, message)
+  try {
+    await runClaude(prompt, DEFAULT_MODEL)
+  } catch (err) {
+    console.error("Error running Claude:", err.message)
+  }
+  // Mark channel as read and exit — no follow-up loop
+  try {
+    await runCommand("bus", ["mark-read", "--agent", AGENT, channel])
+  } catch {}
 }
 
 /**
@@ -966,6 +986,9 @@ async function main() {
       break
     case "triage":
       await handleTriage(route, channel, triggerMessage)
+      break
+    case "oneshot":
+      await handleOneshot(route, channel, triggerMessage)
       break
   }
 
