@@ -197,6 +197,21 @@ impl BrCli {
         Ok(())
     }
 
+    /// Run `br sync` to rebuild/export state (including SQLite DB)
+    pub fn sync() -> Result<()> {
+        let output = Command::new("br")
+            .arg("sync")
+            .output()
+            .context("Failed to execute br sync command")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("br sync failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
     /// Check if br CLI is available
     pub fn is_available() -> bool {
         Command::new("br")

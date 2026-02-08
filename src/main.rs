@@ -10,7 +10,9 @@ mod ui;
 
 use anyhow::Result;
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use crate::data::BrCli;
 
 /// A TUI for viewing and managing beads
 #[derive(Parser, Debug)]
@@ -25,6 +27,34 @@ struct Args {
     refresh: u64,
 }
 
+fn ensure_database_exists(db_path: &Path) -> Result<()> {
+    if db_path.exists() {
+        return Ok(());
+    }
+
+    let in_beads_workspace = db_path
+        .parent()
+        .map(|p| p.ends_with(".beads") && p.exists())
+        .unwrap_or(false);
+
+    if in_beads_workspace {
+        eprintln!(
+            "Database missing at {:?}. Detected .beads workspace; running 'br sync'...",
+            db_path
+        );
+        BrCli::sync()?;
+
+        if db_path.exists() {
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!(
+        "Database not found at {:?}. Run 'br init' (or 'br sync') to initialize a beads workspace.",
+        db_path
+    );
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -32,12 +62,7 @@ async fn main() -> Result<()> {
     // Find the database path
     let db_path = args.db.unwrap_or_else(|| PathBuf::from(".beads/beads.db"));
 
-    if !db_path.exists() {
-        anyhow::bail!(
-            "Database not found at {:?}. Run 'br init' to initialize a beads workspace.",
-            db_path
-        );
-    }
+    ensure_database_exists(&db_path)?;
 
     // Run the application
     app::run(db_path, args.refresh).await

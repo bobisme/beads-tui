@@ -417,6 +417,11 @@ impl App {
                 }
             }
 
+            // Toggle deferred/open for selected bead (detail pane only)
+            KeyCode::Char('D') if self.focus == Focus::Detail => {
+                self.toggle_deferred()?;
+            }
+
             // 'c' key - context dependent:
             // - List focused: toggle closed visibility
             // - Detail focused: add comment
@@ -508,6 +513,25 @@ impl App {
         let idx = self.list_state.selected()?;
         let tree_order = build_tree_order(&self.beads, self.hide_closed, self.filter().as_deref());
         tree_order.get(idx).map(|(bead, _)| *bead)
+    }
+
+    /// Toggle selected bead between open and deferred
+    fn toggle_deferred(&mut self) -> Result<()> {
+        if let Some(bead) = self.get_selected_bead() {
+            let id = bead.id.clone();
+            let next_status = match bead.status {
+                BeadStatus::Open => Some("deferred"),
+                BeadStatus::Deferred => Some("open"),
+                _ => None,
+            };
+
+            if let Some(status) = next_status {
+                BrCli::update_status(&id, status)?;
+                self.refresh()?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Close the selected bead with a reason

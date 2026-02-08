@@ -190,6 +190,7 @@ fn render_footer(
             ("c", "comment"),
             ("e", "edit"),
             ("x", "close/reopen"),
+            ("D", "defer/undefer"),
             ("L", "labels"),
             ("?", "help"),
             ("q", "quit"),
@@ -273,7 +274,7 @@ fn render_footer(
 fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
     // Center a help box
     let help_width = 50.min(area.width.saturating_sub(4));
-    let help_height = 18.min(area.height.saturating_sub(4));
+    let help_height = 19.min(area.height.saturating_sub(4));
     let x = (area.width - help_width) / 2;
     let y = (area.height - help_height) / 2;
     let help_area = Rect::new(x, y, help_width, help_height);
@@ -316,6 +317,10 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         Line::from(vec![
             Span::styled("x            ", Style::default().fg(theme.accent)),
             Span::raw("Close/reopen (detail pane)"),
+        ]),
+        Line::from(vec![
+            Span::styled("D            ", Style::default().fg(theme.accent)),
+            Span::raw("Defer/undefer (detail pane)"),
         ]),
         Line::from(vec![
             Span::styled("c            ", Style::default().fg(theme.accent)),
