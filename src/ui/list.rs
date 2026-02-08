@@ -147,9 +147,9 @@ impl<'a> BeadList<'a> {
         // Indentation: 2 spaces per depth level
         let indent = "  ".repeat(depth);
 
-        // Deferred beads get italic styling on all text spans
-        let italic = if is_deferred {
-            Modifier::ITALIC
+        // Deferred beads get dim + italic styling on all text spans
+        let deferred_mod = if is_deferred {
+            Modifier::DIM | Modifier::ITALIC
         } else {
             Modifier::empty()
         };
@@ -158,22 +158,26 @@ impl<'a> BeadList<'a> {
             Span::raw(indent),
             Span::styled(
                 format!("{} ", type_icon),
-                Style::default().fg(icon_color).add_modifier(italic),
+                Style::default().fg(icon_color).add_modifier(deferred_mod),
             ),
             Span::styled(
                 format!("P{} ", bead.priority),
                 priority_style
                     .add_modifier(Modifier::BOLD)
-                    .add_modifier(italic),
+                    .add_modifier(deferred_mod),
             ),
             Span::styled(
                 bead.id.clone(),
-                Style::default().fg(self.theme.muted).add_modifier(italic),
+                Style::default()
+                    .fg(self.theme.muted)
+                    .add_modifier(deferred_mod),
             ),
             Span::raw(": "),
             Span::styled(
                 bead.title.clone(),
-                Style::default().fg(self.theme.fg).add_modifier(italic),
+                Style::default()
+                    .fg(self.theme.fg)
+                    .add_modifier(deferred_mod),
             ),
         ];
 
@@ -185,7 +189,9 @@ impl<'a> BeadList<'a> {
                 }
                 spans.push(Span::styled(
                     format!("[{}]", label),
-                    Style::default().fg(Color::Yellow),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(deferred_mod),
                 ));
             }
         }
