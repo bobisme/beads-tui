@@ -15,6 +15,7 @@ pub enum BeadStatus {
     Open,
     InProgress,
     Blocked,
+    Deferred,
     Closed,
 }
 
@@ -25,6 +26,7 @@ impl BeadStatus {
             BeadStatus::Open => "\u{25cb}",       // ○ (open circle)
             BeadStatus::InProgress => "\u{25cf}", // ● (filled circle)
             BeadStatus::Blocked => "\u{25a0}",    // ■ (filled square - blocked)
+            BeadStatus::Deferred => "\u{2744}",   // ❄ (snowflake - deferred)
             BeadStatus::Closed => "\u{2713}",     // ✓ (check mark)
         }
     }
@@ -35,6 +37,7 @@ impl BeadStatus {
             BeadStatus::Open,
             BeadStatus::InProgress,
             BeadStatus::Blocked,
+            BeadStatus::Deferred,
             BeadStatus::Closed,
         ]
     }
@@ -46,6 +49,7 @@ impl fmt::Display for BeadStatus {
             BeadStatus::Open => write!(f, "open"),
             BeadStatus::InProgress => write!(f, "in_progress"),
             BeadStatus::Blocked => write!(f, "blocked"),
+            BeadStatus::Deferred => write!(f, "deferred"),
             BeadStatus::Closed => write!(f, "closed"),
         }
     }
@@ -59,6 +63,7 @@ impl std::str::FromStr for BeadStatus {
             "open" => Ok(BeadStatus::Open),
             "in_progress" | "in-progress" | "inprogress" => Ok(BeadStatus::InProgress),
             "blocked" => Ok(BeadStatus::Blocked),
+            "deferred" => Ok(BeadStatus::Deferred),
             "closed" => Ok(BeadStatus::Closed),
             _ => anyhow::bail!("Unknown status: {}", s),
         }
@@ -121,6 +126,7 @@ impl BeadType {
             BeadStatus::Open => self.icon_outline(),
             BeadStatus::InProgress => self.icon_filled(),
             BeadStatus::Blocked => self.icon_outline(), // Outline but red
+            BeadStatus::Deferred => self.icon_outline(), // Outline but dim
             BeadStatus::Closed => self.icon_closed(),
         }
     }
@@ -257,9 +263,9 @@ impl Bead {
         format!("P{}", self.priority)
     }
 
-    /// Check if this bead has the "deferred" label
+    /// Check if this bead has deferred status
     pub fn is_deferred(&self) -> bool {
-        self.labels.iter().any(|l| l == "deferred")
+        self.status == BeadStatus::Deferred
     }
 }
 

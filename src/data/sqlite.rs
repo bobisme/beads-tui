@@ -75,7 +75,8 @@ impl BeadStore {
                 BeadStatus::InProgress => 0,
                 BeadStatus::Open => 1,
                 BeadStatus::Blocked => 2,
-                BeadStatus::Closed => 3,
+                BeadStatus::Deferred => 3,
+                BeadStatus::Closed => 4,
             };
             let status_cmp = status_ord(&a.status).cmp(&status_ord(&b.status));
 
@@ -253,6 +254,10 @@ mod tests {
         assert_eq!(
             "blocked".parse::<BeadStatus>().unwrap(),
             BeadStatus::Blocked
+        );
+        assert_eq!(
+            "deferred".parse::<BeadStatus>().unwrap(),
+            BeadStatus::Deferred
         );
         assert_eq!("closed".parse::<BeadStatus>().unwrap(), BeadStatus::Closed);
     }

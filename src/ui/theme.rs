@@ -36,6 +36,8 @@ pub struct Theme {
     pub status_in_progress: Color,
     /// Status: blocked
     pub status_blocked: Color,
+    /// Status: deferred
+    pub status_deferred: Color,
     /// Status: closed
     pub status_closed: Color,
     /// Priority critical (P0)
@@ -62,6 +64,7 @@ pub const LAZYGIT: Theme = Theme {
     status_open: Color::White,
     status_in_progress: Color::Cyan,
     status_blocked: Color::Red,
+    status_deferred: Color::DarkGray,
     status_closed: Color::Green, // Green for completed!
     priority_critical: Color::Red,
     priority_high: Color::Yellow,
@@ -83,6 +86,7 @@ pub const TOKYO_NIGHT: Theme = Theme {
     status_open: Color::Rgb(169, 177, 214),
     status_in_progress: Color::Rgb(125, 207, 255),
     status_blocked: Color::Rgb(247, 118, 142),
+    status_deferred: Color::Rgb(86, 95, 137), // Muted for deferred
     status_closed: Color::Rgb(158, 206, 106), // Green for completed
     priority_critical: Color::Rgb(247, 118, 142),
     priority_high: Color::Rgb(255, 158, 100),
@@ -104,7 +108,8 @@ pub const DRACULA: Theme = Theme {
     status_open: Color::Rgb(248, 248, 242),
     status_in_progress: Color::Rgb(139, 233, 253),
     status_blocked: Color::Rgb(255, 85, 85),
-    status_closed: Color::Rgb(80, 250, 123), // Green for completed
+    status_deferred: Color::Rgb(98, 114, 164), // Muted for deferred
+    status_closed: Color::Rgb(80, 250, 123),   // Green for completed
     priority_critical: Color::Rgb(255, 85, 85),
     priority_high: Color::Rgb(255, 184, 108),
     priority_medium: Color::Rgb(241, 250, 140),
@@ -125,6 +130,7 @@ pub const NORD: Theme = Theme {
     status_open: Color::Rgb(216, 222, 233),
     status_in_progress: Color::Rgb(136, 192, 208),
     status_blocked: Color::Rgb(191, 97, 106),
+    status_deferred: Color::Rgb(76, 86, 106), // Muted for deferred
     status_closed: Color::Rgb(163, 190, 140), // Green for completed
     priority_critical: Color::Rgb(191, 97, 106),
     priority_high: Color::Rgb(208, 135, 112),

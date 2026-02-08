@@ -78,6 +78,7 @@ impl<'a> DetailPanel<'a> {
             BeadStatus::Open => self.theme.status_open,
             BeadStatus::InProgress => self.theme.status_in_progress,
             BeadStatus::Blocked => self.theme.status_blocked,
+            BeadStatus::Deferred => self.theme.status_deferred,
             BeadStatus::Closed => self.theme.status_closed,
         };
         Style::default().fg(color)
