@@ -1,12 +1,13 @@
 {
-  "version": "1.0.12",
+  "version": "1.0.13",
   "project": {
     "name": "beads-tui",
     "type": [
       "tui"
     ],
     "channel": "beads-tui",
-    "defaultAgent": "beads-tui-dev"
+    "defaultAgent": "beads-tui-dev",
+    "installCommand": "just install"
   },
   "tools": {
     "beads": true,
@@ -19,7 +20,7 @@
     "enabled": false,
     "reviewers": []
   },
-  "pushMain": false,
+  "pushMain": true,
   "agents": {
     "dev": {
       "model": "opus",
