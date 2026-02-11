@@ -344,7 +344,7 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         ]),
         Line::raw(""),
         Line::from(vec![Span::styled(
-            "Mouse: click to select, wheel to scroll",
+            "Mouse: click to select, drag border to resize, wheel to scroll",
             Style::default().fg(theme.muted),
         )]),
         Line::raw(""),

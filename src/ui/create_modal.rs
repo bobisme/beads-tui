@@ -173,6 +173,33 @@ impl CreateModal {
             .collect()
     }
 
+    /// Handle pasted text for the currently focused field.
+    pub fn handle_paste(&mut self, text: &str) {
+        match self.focus {
+            CreateField::Title => {
+                let single_line = text
+                    .lines()
+                    .map(str::trim_end)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let _ = self.title.insert_str(single_line);
+            }
+            CreateField::Description => {
+                let _ = self.description.insert_str(text);
+            }
+            CreateField::Labels => {
+                let labels_line = text
+                    .lines()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let _ = self.labels.insert_str(labels_line);
+            }
+            CreateField::Type | CreateField::Priority => {}
+        }
+    }
+
     /// Handle a key event, returns true if modal should close and submit
     pub fn handle_key(&mut self, key: KeyEvent) -> ModalAction {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -295,6 +322,41 @@ impl CreateModal {
             BeadType::Epic => BeadType::Feature,
             BeadType::Story => BeadType::Epic,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CreateField, CreateModal};
+
+    #[test]
+    fn paste_title_flattens_newlines() {
+        let mut modal = CreateModal::new();
+        modal.focus = CreateField::Title;
+
+        modal.handle_paste("one\ntwo");
+
+        assert_eq!(modal.get_title(), "one two");
+    }
+
+    #[test]
+    fn paste_description_preserves_newlines() {
+        let mut modal = CreateModal::new();
+        modal.focus = CreateField::Description;
+
+        modal.handle_paste("line one\nline two");
+
+        assert_eq!(modal.description.lines(), &["line one", "line two"]);
+    }
+
+    #[test]
+    fn paste_labels_turns_newlines_into_commas() {
+        let mut modal = CreateModal::new();
+        modal.focus = CreateField::Labels;
+
+        modal.handle_paste("ui\nbug");
+
+        assert_eq!(modal.get_labels(), vec!["ui", "bug"]);
     }
 }
 

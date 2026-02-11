@@ -51,7 +51,7 @@ bu
 | `/` | Filter by title |
 | `r` | Refresh from database |
 | `t` | Cycle color theme |
-| `<`/`>` | Resize panes |
+| `<`/`>` | Resize panes (or drag divider with mouse) |
 | `?` | Help |
 | `q` | Quit |
 

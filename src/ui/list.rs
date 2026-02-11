@@ -40,16 +40,13 @@ impl BeadListState {
         if len == 0 {
             return;
         }
+
         let i = match self.list_state.selected() {
-            Some(i) => {
-                if i >= len - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
+            Some(i) if i >= len - 1 => len - 1,
+            Some(i) => i + 1,
             None => 0,
         };
+
         self.list_state.select(Some(i));
     }
 
@@ -57,16 +54,13 @@ impl BeadListState {
         if len == 0 {
             return;
         }
+
         let i = match self.list_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    len - 1
-                } else {
-                    i - 1
-                }
-            }
+            Some(0) => 0,
+            Some(i) => i - 1,
             None => 0,
         };
+
         self.list_state.select(Some(i));
     }
 
@@ -239,5 +233,30 @@ impl<'a> StatefulWidget for BeadList<'a> {
             .highlight_style(highlight_style);
 
         StatefulWidget::render(list, area, buf, &mut state.list_state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BeadListState;
+
+    #[test]
+    fn next_does_not_wrap_at_end() {
+        let mut state = BeadListState::new();
+        state.select(Some(2));
+
+        state.next(3);
+
+        assert_eq!(state.selected(), Some(2));
+    }
+
+    #[test]
+    fn previous_does_not_wrap_at_start() {
+        let mut state = BeadListState::new();
+        state.select(Some(0));
+
+        state.previous(3);
+
+        assert_eq!(state.selected(), Some(0));
     }
 }

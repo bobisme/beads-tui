@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use crossterm::{
     event::{
-        DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
-        MouseButton, MouseEvent, MouseEventKind,
+        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -37,6 +37,9 @@ pub enum InputMode {
     ReopeningBead,
     AddingComment,
 }
+
+const MIN_SPLIT_PERCENT: u16 = 20;
+const MAX_SPLIT_PERCENT: u16 = 80;
 
 /// Application state
 pub struct App {
@@ -83,6 +86,8 @@ pub struct App {
     /// Layout areas for mouse handling
     list_area: Rect,
     detail_area: Rect,
+    /// Whether the pane split is currently being dragged with the mouse
+    split_resize_active: bool,
 }
 
 impl App {
@@ -114,6 +119,7 @@ impl App {
             last_refresh: Instant::now(),
             list_area: Rect::default(),
             detail_area: Rect::default(),
+            split_resize_active: false,
         })
     }
 
@@ -348,10 +354,16 @@ impl App {
 
             // Pane resizing (only when detail is shown)
             KeyCode::Char('<') if self.show_detail => {
-                self.split_percent = self.split_percent.saturating_sub(5).max(20);
+                self.split_percent = self
+                    .split_percent
+                    .saturating_sub(5)
+                    .clamp(MIN_SPLIT_PERCENT, MAX_SPLIT_PERCENT);
             }
             KeyCode::Char('>') if self.show_detail => {
-                self.split_percent = (self.split_percent + 5).min(80);
+                self.split_percent = self
+                    .split_percent
+                    .saturating_add(5)
+                    .clamp(MIN_SPLIT_PERCENT, MAX_SPLIT_PERCENT);
             }
 
             // Search
@@ -450,6 +462,42 @@ impl App {
         Ok(())
     }
 
+    /// Handle pasted text (bracketed paste mode)
+    fn handle_paste(&mut self, text: &str) -> Result<()> {
+        // Help overlay consumes the next interaction
+        if self.show_help {
+            self.show_help = false;
+            return Ok(());
+        }
+
+        match self.input_mode {
+            InputMode::Search => {
+                let old_len = self.search_input.lines().join("\n").len();
+                let single_line = text
+                    .lines()
+                    .map(str::trim_end)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let _ = self.search_input.insert_str(single_line);
+                if self.search_input.lines().join("\n").len() != old_len {
+                    self.list_state.first();
+                }
+            }
+            InputMode::Creating | InputMode::Editing => {
+                self.create_modal.handle_paste(text);
+            }
+            InputMode::ClosingBead | InputMode::ReopeningBead => {
+                let _ = self.reason_input.insert_str(text);
+            }
+            InputMode::AddingComment => {
+                let _ = self.comment_input.insert_str(text);
+            }
+            InputMode::Normal => {}
+        }
+
+        Ok(())
+    }
+
     /// Scroll up by n lines
     fn scroll_up(&mut self, n: usize) {
         let len = self.filtered_len();
@@ -479,6 +527,15 @@ impl App {
                 let x = mouse.column;
                 let y = mouse.row;
 
+                // Click/drag the divider between list and detail panes.
+                if self.is_on_split_handle(x, y) {
+                    self.split_resize_active = true;
+                    self.update_split_from_mouse(x);
+                    return Ok(());
+                }
+
+                self.split_resize_active = false;
+
                 // Check which pane was clicked
                 if self.list_area.contains((x, y).into()) {
                     // Calculate which item was clicked
@@ -495,6 +552,12 @@ impl App {
                     self.focus = Focus::Detail;
                 }
             }
+            MouseEventKind::Drag(MouseButton::Left) if self.split_resize_active => {
+                self.update_split_from_mouse(mouse.column);
+            }
+            MouseEventKind::Up(_) => {
+                self.split_resize_active = false;
+            }
             MouseEventKind::ScrollUp => match self.focus {
                 Focus::List => self.list_state.previous(self.filtered_len()),
                 Focus::Detail => self.detail_state.scroll_up(3),
@@ -506,6 +569,58 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    /// Returns true when both panes are visible and can be resized.
+    fn is_split_resizable(&self) -> bool {
+        self.list_area.width > 0 && self.detail_area.width > 0
+    }
+
+    /// Check whether the mouse is over the split border between list and detail panes.
+    fn is_on_split_handle(&self, x: u16, y: u16) -> bool {
+        if !self.is_split_resizable() {
+            return false;
+        }
+
+        let top = self.list_area.y.min(self.detail_area.y);
+        let bottom = self
+            .list_area
+            .y
+            .saturating_add(self.list_area.height)
+            .max(self.detail_area.y.saturating_add(self.detail_area.height));
+        if y < top || y >= bottom {
+            return false;
+        }
+
+        let list_right = self
+            .list_area
+            .x
+            .saturating_add(self.list_area.width.saturating_sub(1));
+        let detail_left = self.detail_area.x;
+
+        x == list_right || x == detail_left
+    }
+
+    /// Update split percentage from a mouse X position.
+    fn update_split_from_mouse(&mut self, x: u16) {
+        if !self.is_split_resizable() {
+            return;
+        }
+
+        let content_left = self.list_area.x;
+        let total_width = self.list_area.width.saturating_add(self.detail_area.width);
+        if total_width == 0 {
+            return;
+        }
+
+        let content_right = content_left.saturating_add(total_width.saturating_sub(1));
+        let clamped_x = x.clamp(content_left, content_right);
+
+        // +1 so dragging on the current right edge preserves current split more naturally.
+        let left_width = clamped_x.saturating_sub(content_left).saturating_add(1);
+        let raw_percent = ((u32::from(left_width) * 100) / u32::from(total_width)) as u16;
+
+        self.split_percent = raw_percent.clamp(MIN_SPLIT_PERCENT, MAX_SPLIT_PERCENT);
     }
 
     /// Get the currently selected bead
@@ -704,8 +819,13 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
 
     enable_raw_mode().context("Failed to enable raw mode")?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-        .context("Failed to enter alternate screen")?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        EnableBracketedPaste
+    )
+    .context("Failed to enter alternate screen")?;
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend).context("Failed to create terminal")?;
     Ok(terminal)
@@ -717,7 +837,8 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
-        DisableMouseCapture
+        DisableMouseCapture,
+        DisableBracketedPaste
     )?;
     terminal.show_cursor()?;
     Ok(())
@@ -749,7 +870,8 @@ fn suspend(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
     execute!(
         terminal.backend_mut(),
         EnterAlternateScreen,
-        EnableMouseCapture
+        EnableMouseCapture,
+        EnableBracketedPaste
     )
     .context("Failed to enter alternate screen after resume")?;
     terminal.clear()?;
@@ -819,6 +941,9 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
                 },
                 Event::Mouse(mouse) => {
                     app.handle_mouse(mouse)?;
+                }
+                Event::Paste(text) => {
+                    app.handle_paste(&text)?;
                 }
                 _ => {}
             }
