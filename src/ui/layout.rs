@@ -272,16 +272,6 @@ fn render_footer(
 }
 
 fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
-    // Center a help box
-    let help_width = 50.min(area.width.saturating_sub(4));
-    let help_height = 19.min(area.height.saturating_sub(4));
-    let x = (area.width - help_width) / 2;
-    let y = (area.height - help_height) / 2;
-    let help_area = Rect::new(x, y, help_width, help_height);
-
-    // Clear the area
-    frame.render_widget(Clear, help_area);
-
     let help_text = vec![
         Line::from(vec![Span::styled(
             "Keyboard Shortcuts",
@@ -305,6 +295,10 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
         Line::from(vec![
             Span::styled("Tab          ", Style::default().fg(theme.accent)),
             Span::raw("Switch focus"),
+        ]),
+        Line::from(vec![
+            Span::styled("< / >        ", Style::default().fg(theme.accent)),
+            Span::raw("Resize panes"),
         ]),
         Line::from(vec![
             Span::styled("a            ", Style::default().fg(theme.accent)),
@@ -353,6 +347,17 @@ fn render_help_overlay(frame: &mut ratatui::Frame, area: Rect, theme: &Theme) {
             Style::default().fg(theme.muted),
         )]),
     ];
+
+    // Center a help box sized to fit all help lines (+2 for borders)
+    let help_width = 50.min(area.width.saturating_sub(4));
+    let desired_help_height = (help_text.len() as u16).saturating_add(2);
+    let help_height = desired_help_height.min(area.height.saturating_sub(4));
+    let x = (area.width - help_width) / 2;
+    let y = (area.height - help_height) / 2;
+    let help_area = Rect::new(x, y, help_width, help_height);
+
+    // Clear the area
+    frame.render_widget(Clear, help_area);
 
     let help = Paragraph::new(help_text)
         .block(
