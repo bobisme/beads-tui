@@ -252,10 +252,12 @@ impl CreateModal {
     }
 
     fn handle_field_key(&mut self, key: KeyEvent) {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+
         match self.focus {
             CreateField::Title => {
-                // Enter in title moves to description
-                if key.code == KeyCode::Enter {
+                // Plain Enter in title moves to description, but Shift+Enter adds newline
+                if key.code == KeyCode::Enter && !shift {
                     self.focus = CreateField::Description;
                 } else {
                     self.title.input(key);

@@ -214,11 +214,17 @@ impl<'a> StatefulWidget for BeadList<'a> {
             Style::default().fg(self.theme.border)
         };
 
+        let title = if tree_order.is_empty() {
+            " Beads ".to_string()
+        } else {
+            format!(" {} Beads ", tree_order.len())
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
             .border_set(border::ROUNDED)
             .border_style(border_style)
-            .title(" Beads ")
+            .title(title)
             .title_style(
                 Style::default()
                     .fg(self.theme.fg)
