@@ -226,6 +226,29 @@ impl CreateModal {
                 return ModalAction::None;
             }
 
+            // Ctrl+J (Shift+Enter in some terminals) should insert newline, not delete line
+            KeyCode::Char('j') if ctrl => {
+                match self.focus {
+                    CreateField::Title | CreateField::Description | CreateField::Labels => {
+                        // Insert newline instead of letting tui-textarea delete the line
+                        match self.focus {
+                            CreateField::Title => {
+                                let _ = self.title.insert_str("\n");
+                            }
+                            CreateField::Description => {
+                                let _ = self.description.insert_str("\n");
+                            }
+                            CreateField::Labels => {
+                                let _ = self.labels.insert_str("\n");
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+                return ModalAction::None;
+            }
+
             // Tab to switch fields
             KeyCode::Tab if shift => {
                 // Some terminals send Tab with shift modifier

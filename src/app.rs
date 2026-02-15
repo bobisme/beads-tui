@@ -170,6 +170,10 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         // Keep the filter text in search_input
                     }
+                    // Ctrl+J (Shift+Enter in some terminals) - insert newline instead of delete
+                    KeyCode::Char('j') if ctrl => {
+                        let _ = self.search_input.insert_str("\n");
+                    }
                     _ => {
                         let old_len = self.search_input.lines().join("\n").len();
                         self.search_input.input(key);
@@ -224,6 +228,10 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
                     }
+                    // Ctrl+J (Shift+Enter in some terminals) - insert newline instead of delete
+                    KeyCode::Char('j') if ctrl => {
+                        let _ = self.reason_input.insert_str("\n");
+                    }
                     _ => {
                         self.reason_input.input(key);
                     }
@@ -241,6 +249,10 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
                     }
+                    // Ctrl+J (Shift+Enter in some terminals) - insert newline instead of delete
+                    KeyCode::Char('j') if ctrl => {
+                        let _ = self.reason_input.insert_str("\n");
+                    }
                     _ => {
                         self.reason_input.input(key);
                     }
@@ -257,6 +269,10 @@ impl App {
                         self.add_comment()?;
                         self.input_mode = InputMode::Normal;
                         self.comment_input = TextArea::default();
+                    }
+                    // Ctrl+J (Shift+Enter in some terminals) - insert newline instead of delete
+                    KeyCode::Char('j') if ctrl => {
+                        let _ = self.comment_input.insert_str("\n");
                     }
                     _ => {
                         self.comment_input.input(key);
