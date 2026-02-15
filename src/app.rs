@@ -150,6 +150,7 @@ impl App {
     /// Handle a key event
     fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
         // Help overlay takes precedence
         if self.show_help {
@@ -218,7 +219,7 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter if !shift => {
                         self.close_bead()?;
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
@@ -235,7 +236,7 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter if !shift => {
                         self.reopen_bead()?;
                         self.input_mode = InputMode::Normal;
                         self.reason_input = TextArea::default();
@@ -252,7 +253,7 @@ impl App {
                         self.input_mode = InputMode::Normal;
                         self.comment_input = TextArea::default();
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter if !shift => {
                         self.add_comment()?;
                         self.input_mode = InputMode::Normal;
                         self.comment_input = TextArea::default();
