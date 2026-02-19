@@ -9,7 +9,6 @@ A Rust/Ratatui TUI for viewing and managing [beads](https://github.com/Dickleswo
 - Two-pane layout with resizable split (list + detail)
 - Tree hierarchy display for parent-child relationships
 - Create beads with a modal form (lazygit commit-style)
-- Cycle status with a single keypress
 - Filter beads by title
 - Toggle closed bead visibility
 - Multiple color themes (Lazygit, Tokyo Night, Dracula, Nord)
@@ -19,7 +18,7 @@ A Rust/Ratatui TUI for viewing and managing [beads](https://github.com/Dickleswo
 ## Installation
 
 ```bash
-cargo install --path .
+cargo install --git https://github.com/bobisme/beads-tui --tag v0.14.0 --bin bu
 ```
 
 Or build from source:
@@ -46,7 +45,6 @@ bu
 | `g`/`G` | First/last item |
 | `Tab` | Switch focus between panes |
 | `a` | Add new bead |
-| `s` | Cycle status (open -> in_progress -> closed) |
 | `c` | Toggle closed bead visibility |
 | `/` | Filter by title |
 | `r` | Refresh from database |
@@ -65,6 +63,7 @@ bu
 | `Esc` | Cancel |
 
 Text input supports terminal-style navigation:
+
 - `Ctrl+A`/`Ctrl+E` - Jump to start/end
 - `Ctrl+W` - Delete word backward
 - `Ctrl+U`/`Ctrl+K` - Delete to start/end of line
@@ -86,6 +85,7 @@ Generate a temporary beads project with sample data for testing and screenshots:
 ```
 
 This creates a temporary directory with:
+
 - Various beads across different priorities (P0-P3)
 - Multiple bead types (bug, feature, task)
 - Labels, comments, and dependencies

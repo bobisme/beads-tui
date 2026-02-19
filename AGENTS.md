@@ -227,6 +227,9 @@ just test
 # Bump version in Cargo.toml
 # e.g., 0.3.1 to 0.4.0
 
+# Update README install tag to the new release tag
+# (README.md: cargo install --git ... --tag vX.Y.Z)
+
 # Commit with jj
 jj describe -m "feat(scope): description
 
