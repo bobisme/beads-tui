@@ -2,7 +2,7 @@
 
 A Rust/Ratatui TUI for viewing and managing [beads](https://github.com/Dicklesworthstone/beads_rust) issues.
 
-![beads-tui screenshot](images/tui.png)
+![beads-tui screenshot](images/tui.webp)
 
 ## Features
 
